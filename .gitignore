@@ -1,0 +1,68 @@
+# Node.js / npm / yarn / pnpm dependencies
+node_modules/
+jspm_packages/
+.pnpm-store/
+
+# Build and production outputs
+dist/
+dist-ssr/
+build/
+out/
+.next/
+.nuxt/
+.svelte-kit/
+.cache/
+.vite/
+
+# Environment variables & secrets (CRITICAL)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Diagnostic reports (Next.js / Node.js)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+Thumbtack.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swo
+*.swn
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# Local temp files / cache
+.eslintcache
+.stylelintcache
+.turbo/
+.npm/
+.yarn-metadata.json
