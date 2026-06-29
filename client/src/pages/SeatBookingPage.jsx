@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { ArrowLeft, Armchair, Ticket } from 'lucide-react';
 import { api } from '../services/api';
 
-export default function SeatBookingPage({ show, onBack, onContinueToCheckout }) {
+export default function SeatBookingPage({ show, onBack, onContinueToCheckout, user, onAuthRequired }) {
   const { id } = useParams();
   const [currentShow, setCurrentShow] = useState(show);
   const [loadingShow, setLoadingShow] = useState(true);
@@ -11,6 +11,15 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout }) 
 
   useEffect(() => {
     const fetchShowDetails = async () => {
+      try {
+        const fetchedShow = await api.get(`/shows/${id}`);
+        setCurrentShow(fetchedShow);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const initFetch = async () => {
       try {
         const fetchedShow = await api.get(`/shows/${id}`);
         setCurrentShow(fetchedShow);
@@ -23,7 +32,10 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout }) 
         setLoadingShow(false);
       }
     };
-    fetchShowDetails();
+
+    initFetch();
+    const interval = setInterval(fetchShowDetails, 2000);
+    return () => clearInterval(interval);
   }, [id]);
 
   if (loadingShow || !currentShow) {
@@ -46,6 +58,10 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout }) 
   };
 
   const handleSeatClick = async (seatId) => {
+    if (!user) {
+      onAuthRequired();
+      return;
+    }
     if (currentShow.bookedSeats.includes(seatId)) return;
 
     const isSelected = selectedSeats.includes(seatId);
@@ -140,8 +156,8 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout }) 
           <div className="w-full max-w-lg mb-16 text-center relative">
             <div className="w-full h-8 bg-gradient-to-b from-maroon-900 to-maroon-950 rounded-b-3xl shadow-lg relative border-b-4 border-saffron-500/80 overflow-hidden flex items-center justify-center">
               <div className="absolute inset-0 stage-glow"></div>
-              <span className="text-[10px] sm:text-xs font-black tracking-[0.25em] text-saffron-400 uppercase relative z-10">
-                STAGE / રંગમંચ
+              <span className="text-[10px] sm:text-xs font-black tracking-[0.25em] text-white uppercase relative z-10">
+                STAGE / SEATDEKHO
               </span>
             </div>
             <div className="absolute top-8 left-1/2 -translate-x-1/2 w-4/5 h-16 bg-gradient-to-b from-saffron-500/5 to-transparent blur-md pointer-events-none"></div>

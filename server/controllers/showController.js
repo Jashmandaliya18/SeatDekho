@@ -164,7 +164,7 @@ export const lockSeat = async (req, res) => {
       return res.status(400).json({ message: 'Seat number is required.' });
     }
     const now = new Date();
-    const lockExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    const lockExpiry = new Date(Date.now() + 5 * 60 * 1000);
     const seat = await Seat.findOne({ showId, seatNumber });
     if (!seat) {
       return res.status(404).json({ message: 'Seat not found.' });
@@ -212,13 +212,13 @@ export const unlockSeat = async (req, res) => {
     if (!seat) {
       return res.status(400).json({ message: 'Seat not locked by you.' });
     }
-    seat.status = 'available';
+    seat.status = 'locked';
     seat.lockedBy = null;
-    seat.lockedAt = null;
-    seat.lockExpiresAt = null;
+    seat.lockedAt = new Date();
+    seat.lockExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
     seat.bookingId = null;
     await seat.save();
-    res.json({ message: 'Seat unlocked successfully.', seat });
+    res.json({ message: 'Seat placed on hold successfully.', seat });
   } catch (error) {
     res.status(500).json({ error: error.message, message: 'Server error unlocking seat.' });
   }

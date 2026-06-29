@@ -211,7 +211,7 @@ export const createBooking = async (req, res) => {
     });
     await booking.save();
 
-    const lockExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    const lockExpiry = new Date(Date.now() + 5 * 60 * 1000);
     const lockSuccess = await lockSeats(showId, seats, booking._id, lockExpiry, userId);
 
     if (!lockSuccess) {
@@ -345,8 +345,13 @@ export const unlockBooking = async (req, res) => {
     await Seat.updateMany(
       { bookingId: booking._id, status: 'locked' },
       { 
-        $set: { status: 'available', lockedBy: null, bookingId: null }, 
-        $unset: { lockExpiresAt: 1, lockedAt: 1 } 
+        $set: { 
+          status: 'locked', 
+          lockedBy: null, 
+          bookingId: null,
+          lockExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+          lockedAt: new Date()
+        }
       }
     );
 

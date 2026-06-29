@@ -1,9 +1,39 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Calendar, Clock, MapPin, ArrowLeft, Ticket, User, Film, Info } from 'lucide-react';
 import VenueMap from '../components/VenueMap';
+import { api } from '../services/api';
 
-export default function ShowDetailsPage({ show, onBack, onBookSeats }) {
-  if (!show) return null;
+export default function ShowDetailsPage({ show: initialShow, onBack, onBookSeats }) {
+  const { id } = useParams();
+  const [currentShow, setCurrentShow] = useState(initialShow);
+  const [loading, setLoading] = useState(!initialShow);
+
+  useEffect(() => {
+    if (!currentShow) {
+      const fetchShow = async () => {
+        try {
+          const data = await api.get(`/shows/${id}`);
+          setCurrentShow(data);
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchShow();
+    }
+  }, [id, currentShow]);
+
+  if (loading || !currentShow) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="w-10 h-10 border-4 border-maroon-100 border-t-maroon-800 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  const show = currentShow;
 
   
   const formatDate = (dateStr) => {

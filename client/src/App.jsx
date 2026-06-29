@@ -54,13 +54,15 @@ export default function App() {
     navigate(`/show/${show._id}`);
   };
 
-  const handleBookSeats = () => {
-    if (selectedShow) {
+  const handleBookSeats = (showObj) => {
+    const activeShow = showObj || selectedShow;
+    if (activeShow) {
+      setSelectedShow(activeShow);
       if (!user) {
         setIsRegister(false);
         setShowAuthModal(true);
       } else {
-        navigate(`/show/${selectedShow._id}/booking`);
+        navigate(`/show/${activeShow._id}/booking`);
       }
     }
   };
@@ -147,39 +149,40 @@ export default function App() {
             <Route 
               path="/show/:id" 
               element={
-                selectedShow ? (
-                  <ShowDetailsPage 
-                    show={selectedShow}
-                    onBack={handleGoHome}
-                    onBookSeats={handleBookSeats}
-                  />
-                ) : <Navigate to="/" />
+                <ShowDetailsPage 
+                  show={selectedShow}
+                  onBack={handleGoHome}
+                  onBookSeats={handleBookSeats}
+                />
               } 
             />
 
              <Route 
               path="/show/:id/booking" 
               element={
-                selectedShow && user ? (
-                  <SeatBookingPage 
-                    show={selectedShow}
-                    onBack={() => navigate(`/show/${selectedShow._id}`)}
-                    onContinueToCheckout={handleContinueToCheckout}
-                  />
-                ) : <Navigate to="/" />
+                <SeatBookingPage 
+                  show={selectedShow}
+                  onBack={() => navigate(`/show/${selectedShow?._id || location.pathname.split('/')[2]}`)}
+                  onContinueToCheckout={handleContinueToCheckout}
+                  user={user}
+                  onAuthRequired={() => {
+                    setIsRegister(false);
+                    setShowAuthModal(true);
+                  }}
+                />
               } 
             />
 
             <Route 
               path="/checkout" 
               element={
-                selectedShow && selectedSeats.length && user ? (
+                selectedSeats.length && user ? (
                   <CheckoutPage 
                     show={selectedShow}
                     selectedSeats={selectedSeats}
                     totalAmount={bookingAmount}
                     user={user}
-                    onBack={() => navigate(`/show/${selectedShow._id}/booking`)}
+                    onBack={() => navigate(`/show/${selectedShow?._id || selectedSeats[0]?.split('-')[0]}/booking`)}
                     onBookingSuccess={handleBookingSuccess}
                   />
                 ) : <Navigate to="/" />
