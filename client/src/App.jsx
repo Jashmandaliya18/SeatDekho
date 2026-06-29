@@ -21,6 +21,8 @@ export default function App() {
   const [finalBooking, setFinalBooking] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isRegister, setIsRegister] = useState(false);
 
   
   useEffect(() => {
@@ -54,7 +56,12 @@ export default function App() {
 
   const handleBookSeats = () => {
     if (selectedShow) {
-      navigate(`/show/${selectedShow._id}/booking`);
+      if (!user) {
+        setIsRegister(false);
+        setShowAuthModal(true);
+      } else {
+        navigate(`/show/${selectedShow._id}/booking`);
+      }
     }
   };
 
@@ -104,6 +111,10 @@ export default function App() {
         currentView={currentView}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
+        showAuthModal={showAuthModal}
+        setShowAuthModal={setShowAuthModal}
+        isRegister={isRegister}
+        setIsRegister={setIsRegister}
       />
 
       <main className="flex-1">
@@ -146,10 +157,10 @@ export default function App() {
               } 
             />
 
-            <Route 
+             <Route 
               path="/show/:id/booking" 
               element={
-                selectedShow ? (
+                selectedShow && user ? (
                   <SeatBookingPage 
                     show={selectedShow}
                     onBack={() => navigate(`/show/${selectedShow._id}`)}
@@ -162,7 +173,7 @@ export default function App() {
             <Route 
               path="/checkout" 
               element={
-                selectedShow && selectedSeats.length ? (
+                selectedShow && selectedSeats.length && user ? (
                   <CheckoutPage 
                     show={selectedShow}
                     selectedSeats={selectedSeats}

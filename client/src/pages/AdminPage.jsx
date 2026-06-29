@@ -816,7 +816,7 @@ export default function AdminPage() {
                           setArtistNameInput('');
                           setArtistCategoryInput('Actor');
                         }}
-                        className="px-4 py-1.5 bg-saffron-650 hover:bg-saffron-700 text-white font-extrabold text-xs rounded-lg transition-all shrink-0 h-[32px] flex items-center justify-center"
+                        className="px-4 py-1.5 bg-saffron-600 hover:bg-saffron-700 text-white font-extrabold text-xs rounded-lg transition-all shrink-0 h-[32px] flex items-center justify-center"
                       >
                         Add Artist
                       </button>
@@ -924,28 +924,39 @@ export default function AdminPage() {
                         
                         <div className="w-full space-y-2 overflow-x-auto pb-2 text-center">
                           <div className="min-w-[200px] flex flex-col space-y-1.5">
-                            {builderRows.map((row, idx) => {
-                              let seatColor = 'bg-slate-400 border-slate-500 text-white';
-                              
-                              if (row.category === 'VIP') seatColor = 'bg-gold-500 border-gold-600 text-white';
-                              if (row.category === 'Gold') seatColor = 'bg-saffron-500 border-saffron-600 text-white';
+                            {(() => {
+                              const maxBuilderSeats = Math.max(...builderRows.map(r => Math.min(r.seatsCount, 15)), 1);
+                              return builderRows.map((row, idx) => {
+                                let seatColor = 'bg-slate-400 border-slate-500 text-white';
+                                if (row.category === 'VIP') seatColor = 'bg-gold-500 border-gold-600 text-white';
+                                if (row.category === 'Gold') seatColor = 'bg-saffron-500 border-saffron-600 text-white';
 
-                              return (
-                                <div key={idx} className="flex items-center justify-center space-x-2">
-                                  <span className="text-[10px] font-black text-gray-800 w-4 shrink-0">{row.rowName}</span>
-                                  <div className="flex items-center space-x-0.5 justify-center">
-                                    {Array.from({ length: Math.min(row.seatsCount, 15) }, (_, seatIndex) => (
-                                      <span 
-                                        key={seatIndex} 
-                                        className={`w-2.5 h-2.5 rounded-xs border-[0.5px] text-[4px] font-black flex items-center justify-center shrink-0 shadow-3xs ${seatColor}`}
-                                      ></span>
-                                    ))}
-                                    {row.seatsCount > 15 && <span className="text-[8px] text-gray-400 font-bold pl-0.5">+{row.seatsCount - 15}</span>}
+                                return (
+                                  <div key={idx} className="flex items-center justify-center space-x-2">
+                                    <span className="text-[10px] font-black text-gray-800 w-4 shrink-0">{row.rowName}</span>
+                                    <div className="flex items-center justify-center">
+                                      <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${maxBuilderSeats * 2}, 0.3125rem)` }}>
+                                        {Array.from({ length: Math.min(row.seatsCount, 15) }, (_, seatIndex) => {
+                                          const offset = maxBuilderSeats - Math.min(row.seatsCount, 15);
+                                          const style = {
+                                            gridColumn: seatIndex === 0 ? `${offset + 1} / span 2` : 'span 2'
+                                          };
+                                          return (
+                                            <span 
+                                              key={seatIndex} 
+                                              style={style}
+                                              className={`w-2.5 h-2.5 rounded-xs border-[0.5px] text-[4px] font-black flex items-center justify-center shrink-0 shadow-3xs ${seatColor}`}
+                                            ></span>
+                                          );
+                                        })}
+                                      </div>
+                                      {row.seatsCount > 15 && <span className="text-[8px] text-gray-400 font-bold pl-1 shrink-0">+{row.seatsCount - 15}</span>}
+                                    </div>
+                                    <span className="text-[10px] font-black text-gray-800 w-4 text-right shrink-0">{row.rowName}</span>
                                   </div>
-                                  <span className="text-[10px] font-black text-gray-800 w-4 text-right shrink-0">{row.rowName}</span>
-                                </div>
-                              );
-                            })}
+                                );
+                              });
+                            })()}
                           </div>
                         </div>
 
@@ -1086,7 +1097,7 @@ export default function AdminPage() {
                                 {show.title}
                               </h4>
                               <p className="text-[9px] text-gray-500 font-medium truncate mt-0.5">{show.venue.split(',')[0]}</p>
-                              <p className="text-[9px] text-saffron-650 font-bold mt-0.5">{show.date} • {show.time}</p>
+                              <p className="text-[9px] text-saffron-600 font-bold mt-0.5">{show.date} • {show.time}</p>
                             </div>
                             
                             <div className="border-t border-gray-200/60 pt-1.5 space-y-1 text-[9px] font-bold text-gray-650">

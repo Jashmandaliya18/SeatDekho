@@ -1,5 +1,6 @@
 import Show from '../models/Show.js';
 import Seat from '../models/Seat.js';
+import jwt from 'jsonwebtoken';
 
 export const getShows = async (req, res) => {
   try {
@@ -31,18 +32,33 @@ export const getShowById = async (req, res) => {
     if (!show) {
       return res.status(404).json({ message: 'Show not found.' });
     }
-
     const now = new Date();
+    let userId = null;
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const verified = jwt.verify(token, process.env.JWT_SECRET);
+        if (verified) {
+          userId = verified.id;
+        }
+      } catch (err) {}
+    }
     const activeLocks = await Seat.find({
       showId: show._id,
       status: 'locked',
       lockExpiresAt: { $gt: now }
-    }).select('seatNumber');
-
-    const lockNumbers = activeLocks.map(l => l.seatNumber);
+    });
+    const otherUserLocks = activeLocks
+      .filter(l => !userId || l.lockedBy?.toString() !== userId.toString())
+      .map(l => l.seatNumber);
+    const currentUserLocks = activeLocks
+      .filter(l => userId && l.lockedBy?.toString() === userId.toString())
+      .map(l => l.seatNumber);
     const plainShow = show.toObject();
-    plainShow.bookedSeats = [...new Set([...plainShow.bookedSeats, ...lockNumbers])];
-
+    plainShow.bookedSeats = show.bookedSeats;
+    plainShow.otherUserLocks = otherUserLocks;
+    plainShow.currentUserLocks = currentUserLocks;
     res.json(plainShow);
   } catch (error) {
     res.status(500).json({ error: error.message, message: 'Server error retrieving show details.' });
@@ -136,5 +152,74 @@ export const deleteShow = async (req, res) => {
     res.json({ message: 'Show deleted successfully.', showId: req.params.id });
   } catch (error) {
     res.status(500).json({ error: error.message, message: 'Server error deleting show.' });
+  }
+};
+
+export const lockSeat = async (req, res) => {
+  try {
+    const { seatNumber } = req.body;
+    const showId = req.params.id;
+    const userId = req.user._id;
+    if (!seatNumber) {
+      return res.status(400).json({ message: 'Seat number is required.' });
+    }
+    const now = new Date();
+    const lockExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    const seat = await Seat.findOne({ showId, seatNumber });
+    if (!seat) {
+      return res.status(404).json({ message: 'Seat not found.' });
+    }
+    if (seat.status === 'booked') {
+      return res.status(400).json({ message: 'Seat is already booked.' });
+    }
+    if (seat.status === 'locked' && seat.lockExpiresAt > now && seat.lockedBy?.toString() !== userId.toString()) {
+      return res.status(400).json({ message: 'Seat is locked by another user.' });
+    }
+    const userLocksCount = await Seat.countDocuments({
+      showId,
+      status: 'locked',
+      lockedBy: userId,
+      lockExpiresAt: { $gt: now }
+    });
+    if (userLocksCount >= 10) {
+      return res.status(400).json({ message: 'You can select a maximum of 10 seats.' });
+    }
+    seat.status = 'locked';
+    seat.lockedBy = userId;
+    seat.lockedAt = now;
+    seat.lockExpiresAt = lockExpiry;
+    await seat.save();
+    res.json({ message: 'Seat locked successfully.', seat });
+  } catch (error) {
+    res.status(500).json({ error: error.message, message: 'Server error locking seat.' });
+  }
+};
+
+export const unlockSeat = async (req, res) => {
+  try {
+    const { seatNumber } = req.body;
+    const showId = req.params.id;
+    const userId = req.user._id;
+    if (!seatNumber) {
+      return res.status(400).json({ message: 'Seat number is required.' });
+    }
+    const seat = await Seat.findOne({
+      showId,
+      seatNumber,
+      status: 'locked',
+      lockedBy: userId
+    });
+    if (!seat) {
+      return res.status(400).json({ message: 'Seat not locked by you.' });
+    }
+    seat.status = 'available';
+    seat.lockedBy = null;
+    seat.lockedAt = null;
+    seat.lockExpiresAt = null;
+    seat.bookingId = null;
+    await seat.save();
+    res.json({ message: 'Seat unlocked successfully.', seat });
+  } catch (error) {
+    res.status(500).json({ error: error.message, message: 'Server error unlocking seat.' });
   }
 };

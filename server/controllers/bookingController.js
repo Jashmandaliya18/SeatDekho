@@ -27,7 +27,7 @@ const generateBookingId = () => {
   return result;
 };
 
-const lockSeats = async (showId, seatsRequested, bookingId, lockExpiry) => {
+const lockSeats = async (showId, seatsRequested, bookingId, lockExpiry, userId) => {
   const now = new Date();
   
   const result = await Seat.updateMany(
@@ -36,7 +36,8 @@ const lockSeats = async (showId, seatsRequested, bookingId, lockExpiry) => {
       seatNumber: { $in: seatsRequested },
       $or: [
         { status: 'available' },
-        { status: 'locked', lockExpiresAt: { $lt: now } }
+        { status: 'locked', lockExpiresAt: { $lt: now } },
+        { status: 'locked', lockedBy: userId }
       ]
     },
     {
@@ -44,7 +45,8 @@ const lockSeats = async (showId, seatsRequested, bookingId, lockExpiry) => {
         status: 'locked',
         bookingId: bookingId,
         lockExpiresAt: lockExpiry,
-        lockedAt: now
+        lockedAt: now,
+        lockedBy: userId
       }
     }
   );
@@ -75,10 +77,15 @@ const lockSeats = async (showId, seatsRequested, bookingId, lockExpiry) => {
 
 export const createBooking = async (req, res) => {
   try {
-    const { showId, customerDetails, seats, totalAmount, userId } = req.body;
+    const { showId, customerDetails, seats, totalAmount } = req.body;
+    const userId = req.user._id;
 
     if (!showId || !customerDetails || !seats || !seats.length || !totalAmount) {
       return res.status(400).json({ message: 'Missing required booking details.' });
+    }
+
+    if (seats.length > 10) {
+      return res.status(400).json({ message: 'You can select a maximum of 10 seats.' });
     }
 
     const show = await Show.findById(showId);
@@ -101,7 +108,7 @@ export const createBooking = async (req, res) => {
 
     const now = new Date();
     const alreadyReserved = seatsStatus
-      .filter(s => s.status === 'booked' || (s.status === 'locked' && s.lockExpiresAt > now))
+      .filter(s => s.status === 'booked' || (s.status === 'locked' && s.lockExpiresAt > now && s.lockedBy?.toString() !== userId.toString()))
       .map(s => s.seatNumber);
 
     if (alreadyReserved.length > 0) {
@@ -161,7 +168,8 @@ export const createBooking = async (req, res) => {
           seatNumber: { $in: seats },
           $or: [
             { status: 'available' },
-            { status: 'locked', lockExpiresAt: { $lt: new Date() } }
+            { status: 'locked', lockExpiresAt: { $lt: new Date() } },
+            { status: 'locked', lockedBy: userId }
           ]
         },
         {
@@ -204,7 +212,7 @@ export const createBooking = async (req, res) => {
     await booking.save();
 
     const lockExpiry = new Date(Date.now() + 10 * 60 * 1000);
-    const lockSuccess = await lockSeats(showId, seats, booking._id, lockExpiry);
+    const lockSuccess = await lockSeats(showId, seats, booking._id, lockExpiry, userId);
 
     if (!lockSuccess) {
       await Booking.findByIdAndDelete(booking._id);

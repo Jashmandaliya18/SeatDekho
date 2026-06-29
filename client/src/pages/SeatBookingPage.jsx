@@ -1,34 +1,77 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { ArrowLeft, Armchair, Ticket } from 'lucide-react';
+import { api } from '../services/api';
 
 export default function SeatBookingPage({ show, onBack, onContinueToCheckout }) {
+  const { id } = useParams();
+  const [currentShow, setCurrentShow] = useState(show);
+  const [loadingShow, setLoadingShow] = useState(true);
   const [selectedSeats, setSelectedSeats] = useState([]);
 
-  if (!show) return null;
+  useEffect(() => {
+    const fetchShowDetails = async () => {
+      try {
+        const fetchedShow = await api.get(`/shows/${id}`);
+        setCurrentShow(fetchedShow);
+        if (fetchedShow.currentUserLocks) {
+          setSelectedSeats(fetchedShow.currentUserLocks);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingShow(false);
+      }
+    };
+    fetchShowDetails();
+  }, [id]);
+
+  if (loadingShow || !currentShow) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="w-10 h-10 border-4 border-maroon-100 border-t-maroon-800 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   
   const getCategoryPrice = (catName) => {
-    const category = show.categories.find(c => c.name === catName);
+    const category = currentShow.categories.find(c => c.name === catName);
     return category ? category.price : 0;
   };
 
-  
   const getSeatCategory = (rowName) => {
-    const rowInfo = show.layout.find(r => r.rowName === rowName);
+    const rowInfo = currentShow.layout.find(r => r.rowName === rowName);
     return rowInfo ? rowInfo.category : 'Silver';
   };
 
-  
-  const handleSeatClick = (seatId) => {
-    if (show.bookedSeats.includes(seatId)) return; 
+  const handleSeatClick = async (seatId) => {
+    if (currentShow.bookedSeats.includes(seatId)) return;
 
-    setSelectedSeats(prev => {
-      if (prev.includes(seatId)) {
-        return prev.filter(id => id !== seatId);
-      } else {
-        return [...prev, seatId];
+    const isSelected = selectedSeats.includes(seatId);
+
+    if (isSelected) {
+      try {
+        setSelectedSeats(prev => prev.filter(id => id !== seatId));
+        await api.post(`/shows/${currentShow._id}/unlock-seat`, { seatNumber: seatId });
+      } catch (err) {
+        console.error(err);
+        setSelectedSeats(prev => [...prev, seatId]);
       }
-    });
+    } else {
+      if (selectedSeats.length >= 10) {
+        alert('You can select a maximum of 10 seats.');
+        return;
+      }
+      try {
+        setSelectedSeats(prev => [...prev, seatId]);
+        await api.post(`/shows/${currentShow._id}/lock-seat`, { seatNumber: seatId });
+      } catch (err) {
+        console.error(err);
+        setSelectedSeats(prev => prev.filter(id => id !== seatId));
+        alert(err.message || 'Failed to lock seat. It may have been locked by another user.');
+      }
+    }
   };
 
   
@@ -59,10 +102,10 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout }) 
           </button>
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-maroon-900 tracking-tight leading-tight">
-              {show.title}
+              {currentShow.title}
             </h1>
             <p className="text-xs text-gray-500 font-medium">
-              {show.venue.split(',')[0]} • {show.date} at {show.time}
+              {currentShow.venue.split(',')[0]} • {currentShow.date} at {currentShow.time}
             </p>
           </div>
         </div>
@@ -76,6 +119,10 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout }) 
           <div className="flex items-center space-x-1.5">
             <span className="w-3.5 h-3.5 bg-blue-600 rounded-md border border-blue-700 block animate-pulse"></span>
             <span>Selected</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="w-3.5 h-3.5 bg-amber-500 rounded-md border border-amber-600 block animate-pulse"></span>
+            <span>Hold (Selected by Others)</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <span className="w-3.5 h-3.5 bg-gray-200 rounded-md border border-gray-300 block"></span>
@@ -103,62 +150,71 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout }) 
           
           <div className="w-full space-y-4 overflow-x-auto pb-4">
             <div className="min-w-[640px] flex flex-col space-y-3.5">
-              {show.layout.map((row) => {
-                
-                let badgeStyle = 'bg-gray-100 text-gray-500';
-                if (row.category === 'VIP') badgeStyle = 'bg-gold-100 text-gold-700 border border-gold-200';
-                if (row.category === 'Gold') badgeStyle = 'bg-orange-50 text-saffron-700 border border-saffron-100';
+              {(() => {
+                const maxSeats = Math.max(...currentShow.layout.map(r => r.seatsCount));
+                return currentShow.layout.map((row) => {
+                  let badgeStyle = 'bg-gray-100 text-gray-500';
+                  if (row.category === 'VIP') badgeStyle = 'bg-gold-100 text-gold-700 border border-gold-200';
+                  if (row.category === 'Gold') badgeStyle = 'bg-orange-50 text-saffron-700 border border-saffron-100';
 
-                return (
-                  <div key={row.rowName} className="flex items-center justify-between space-x-4">
-                    
-                    <div className="w-16 flex items-center space-x-1.5 shrink-0">
-                      <span className="text-sm font-black text-gray-800 w-5">{row.rowName}</span>
-                      <span className={`text-[8px] font-black tracking-wider px-1.5 py-0.5 rounded-sm uppercase ${badgeStyle}`}>
-                        {row.category}
-                      </span>
+                  return (
+                    <div key={row.rowName} className="flex items-center justify-between space-x-4">
+                      <div className="w-16 flex items-center space-x-1.5 shrink-0">
+                        <span className="text-sm font-black text-gray-800 w-5">{row.rowName}</span>
+                        <span className={`text-[8px] font-black tracking-wider px-1.5 py-0.5 rounded-sm uppercase ${badgeStyle}`}>
+                          {row.category}
+                        </span>
+                      </div>
+
+                      <div className="flex-1 flex justify-center items-center">
+                        <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${maxSeats * 2}, 1rem)` }}>
+                          {Array.from({ length: row.seatsCount }, (_, index) => {
+                            const seatNumber = index + 1;
+                            const seatId = `${row.rowName}-${seatNumber}`;
+                            const isBooked = currentShow.bookedSeats.includes(seatId);
+                            const isOtherLocked = currentShow.otherUserLocks?.includes(seatId);
+                            const isSelected = selectedSeats.includes(seatId);
+
+                            let seatColor = 'bg-emerald-500 border-emerald-600 text-white hover:bg-emerald-650';
+                            if (isBooked) {
+                              seatColor = 'bg-gray-200 border-gray-300 text-gray-400 cursor-not-allowed';
+                            } else if (isOtherLocked) {
+                              seatColor = 'bg-amber-500 border-amber-600 text-white cursor-not-allowed animate-pulse';
+                            } else if (isSelected) {
+                              seatColor = 'bg-blue-600 border-blue-750 text-white hover:bg-blue-700 shadow-sm';
+                            }
+
+                            const offset = maxSeats - row.seatsCount;
+                            const style = {
+                              gridColumn: index === 0 ? `${offset + 1} / span 2` : 'span 2'
+                            };
+
+                            return (
+                              <button
+                                key={seatId}
+                                onClick={() => handleSeatClick(seatId)}
+                                disabled={isBooked || isOtherLocked}
+                                style={style}
+                                title={`${row.category} Row ${row.rowName} Seat ${seatNumber} - ₹${getCategoryPrice(row.category)}`}
+                                className={`w-8 h-8 rounded-lg border text-[10px] font-black flex items-center justify-center transition-all ${seatColor}`}
+                              >
+                                {seatNumber}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <span className="text-sm font-black text-gray-800 w-5 text-right shrink-0">{row.rowName}</span>
                     </div>
-
-                    
-                    <div className="flex-1 flex justify-center items-center space-x-1.5">
-                      {Array.from({ length: row.seatsCount }, (_, index) => {
-                        const seatNumber = index + 1;
-                        const seatId = `${row.rowName}-${seatNumber}`;
-                        const isBooked = show.bookedSeats.includes(seatId);
-                        const isSelected = selectedSeats.includes(seatId);
-
-                        let seatColor = 'bg-emerald-500 border-emerald-600 text-white hover:bg-emerald-650';
-                        if (isBooked) {
-                          seatColor = 'bg-gray-200 border-gray-300 text-gray-400 cursor-not-allowed';
-                        } else if (isSelected) {
-                          seatColor = 'bg-blue-600 border-blue-750 text-white hover:bg-blue-700 shadow-sm';
-                        }
-
-                        return (
-                          <button
-                            key={seatId}
-                            onClick={() => handleSeatClick(seatId)}
-                            disabled={isBooked}
-                            title={`${row.category} Row ${row.rowName} Seat ${seatNumber} - ₹${getCategoryPrice(row.category)}`}
-                            className={`w-8 h-8 rounded-lg border text-[10px] font-black flex items-center justify-center transition-all ${seatColor}`}
-                          >
-                            {seatNumber}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    
-                    <span className="text-sm font-black text-gray-800 w-5 text-right shrink-0">{row.rowName}</span>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </div>
 
-          
           <div className="mt-8 border-t border-gray-150 pt-6 w-full flex flex-wrap justify-center gap-6 text-xs font-bold text-gray-500">
-            {show.categories.map(cat => (
+            {currentShow.categories.map(cat => (
               <div key={cat.name} className="flex items-center space-x-1.5">
                 <Armchair className={`w-4.5 h-4.5 ${
                   cat.name === 'VIP' ? 'text-gold-500' : cat.name === 'Gold' ? 'text-saffron-500' : 'text-gray-400'

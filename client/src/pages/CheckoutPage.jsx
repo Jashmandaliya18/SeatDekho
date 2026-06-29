@@ -4,8 +4,8 @@ import MockPaymentModal from '../components/MockPaymentModal';
 import { api } from '../services/api';
 
 export default function CheckoutPage({ show, selectedSeats, totalAmount, user, onBack, onBookingSuccess }) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState('');
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [error, setError] = useState('');

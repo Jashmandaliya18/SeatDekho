@@ -3,10 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Theater, User as UserIcon, LogOut, ShieldAlert, Key, Loader2, Search } from 'lucide-react';
 import { api } from '../services/api';
 
-export default function Navbar({ user, onAuthChange, currentView, searchTerm, setSearchTerm }) {
+export default function Navbar({ user, onAuthChange, currentView, searchTerm, setSearchTerm, showAuthModal, setShowAuthModal, isRegister, setIsRegister }) {
   const navigate = useNavigate();
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [isRegister, setIsRegister] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -84,11 +82,15 @@ export default function Navbar({ user, onAuthChange, currentView, searchTerm, se
 
     try {
       if (isRegister) {
-        
-        const data = await api.post('/auth/register', { name, email, password });
-        localStorage.setItem('token', data.token);
-        onAuthChange(data.user);
-        setShowAuthModal(false);
+        if (!isOtpSent) {
+          await api.post('/auth/register/send-otp', { name, email, password });
+          setIsOtpSent(true);
+        } else {
+          const data = await api.post('/auth/register/verify', { email, otp });
+          localStorage.setItem('token', data.token);
+          onAuthChange(data.user);
+          setShowAuthModal(false);
+        }
       } else {
         if (usePasswordLogin) {
           
@@ -319,55 +321,99 @@ export default function Navbar({ user, onAuthChange, currentView, searchTerm, se
 
               <form onSubmit={handleAuthSubmit} className={`space-y-4 transition-all duration-300 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
                 {isRegister ? (
-                  
                   <>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Full Name</label>
-                      <input 
-                        type="text" 
-                        required
-                        placeholder="e.g. Ramesh Mehta"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full px-3.5 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-maroon-700 transition-colors focus:ring-1 focus:ring-maroon-700/50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Email Address</label>
-                      <input 
-                        type="email" 
-                        required
-                        placeholder="name@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full px-3.5 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-maroon-700 transition-colors focus:ring-1 focus:ring-maroon-700/50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Password</label>
-                      <input 
-                        type="password" 
-                        required
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full px-3.5 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-maroon-700 transition-colors focus:ring-1 focus:ring-maroon-700/50"
-                      />
-                    </div>
-                    <button 
-                      type="submit"
-                      disabled={loading}
-                      className="w-full bg-gradient-to-r from-maroon-800 to-maroon-700 hover:from-maroon-900 hover:to-maroon-800 text-white font-bold py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 text-sm flex items-center justify-center space-x-2"
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Creating Account...</span>
-                        </>
-                      ) : (
-                        <span>Create Account</span>
-                      )}
-                    </button>
+                    {!isOtpSent ? (
+                      <>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Full Name</label>
+                          <input 
+                            type="text" 
+                            required
+                            placeholder="e.g. Ramesh Mehta"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className="w-full px-3.5 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-maroon-700 transition-colors focus:ring-1 focus:ring-maroon-700/50"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Email Address</label>
+                          <input 
+                            type="email" 
+                            required
+                            placeholder="name@example.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full px-3.5 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-maroon-700 transition-colors focus:ring-1 focus:ring-maroon-700/50"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Password</label>
+                          <input 
+                            type="password" 
+                            required
+                            placeholder="••••••••"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full px-3.5 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-maroon-700 transition-colors focus:ring-1 focus:ring-maroon-700/50"
+                          />
+                        </div>
+                        <button 
+                          type="submit"
+                          disabled={loading}
+                          className="w-full bg-gradient-to-r from-maroon-800 to-maroon-700 hover:from-maroon-900 hover:to-maroon-800 text-white font-bold py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 text-sm flex items-center justify-center space-x-2"
+                        >
+                          {loading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Sending OTP...</span>
+                            </>
+                          ) : (
+                            <span>Send OTP Verification Code</span>
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs text-gray-600 mb-2">
+                          We sent a 6-digit OTP to <strong className="text-gray-900">{email}</strong>.
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Verification OTP</label>
+                          <input 
+                            type="text" 
+                            required
+                            maxLength="6"
+                            placeholder="123456"
+                            value={otp}
+                            onChange={(e) => setOtp(e.target.value)}
+                            className="w-full px-3.5 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg text-center tracking-widest font-mono focus:outline-hidden focus:border-maroon-700 transition-colors"
+                          />
+                        </div>
+                        <button 
+                          type="submit"
+                          disabled={loading}
+                          className="w-full bg-gradient-to-r from-maroon-800 to-maroon-700 hover:from-maroon-900 hover:to-maroon-800 text-white font-bold py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 text-sm flex items-center justify-center space-x-2"
+                        >
+                          {loading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Verifying...</span>
+                            </>
+                          ) : (
+                            <span>Verify & Register</span>
+                          )}
+                        </button>
+                        <div className="text-center flex justify-between px-1">
+                          <button 
+                            type="button"
+                            onClick={() => setIsOtpSent(false)}
+                            className="text-xs text-gray-500 hover:text-maroon-800 font-bold"
+                          >
+                            &larr; Back
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </>
                 ) : (
                   
