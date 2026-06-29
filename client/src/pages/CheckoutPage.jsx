@@ -188,7 +188,7 @@ export default function CheckoutPage({ show, selectedSeats, totalAmount, user, o
                 <input 
                   type="text" 
                   required
-                  placeholder="Please enter your full name (e.g., Jash Mandaliya)"
+                  placeholder="Please enter your full name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-hidden focus:border-maroon-700"
@@ -204,7 +204,7 @@ export default function CheckoutPage({ show, selectedSeats, totalAmount, user, o
                   <input 
                     type="email" 
                     required
-                    placeholder="Please enter your email address for ticket delivery (e.g., jash@example.com)"
+                    placeholder="Please enter your email address"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-hidden focus:border-maroon-700"
@@ -219,7 +219,7 @@ export default function CheckoutPage({ show, selectedSeats, totalAmount, user, o
                   <input 
                     type="tel" 
                     required
-                    placeholder="Please enter your 10-digit mobile number (e.g., 98765 43210)"
+                    placeholder="Please enter mobile number"
                     maxLength="14"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}

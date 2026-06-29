@@ -32,7 +32,6 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Quick Contact info */}
           <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-saffron-400">Venue & Bookings</h3>
             <ul className="space-y-3 text-sm text-maroon-200/80">
@@ -51,7 +50,6 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Opening hours */}
           <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-saffron-400">Office Hours</h3>
             <ul className="space-y-2 text-sm text-maroon-200/80">
