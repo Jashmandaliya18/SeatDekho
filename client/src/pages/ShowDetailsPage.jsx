@@ -305,7 +305,7 @@ export default function ShowDetailsPage({ show: initialShow, onBack, onBookSeats
 
             
             <button 
-              onClick={onBookSeats}
+              onClick={() => onBookSeats(show)}
               className="w-full bg-gradient-to-r from-saffron-600 to-saffron-500 hover:from-saffron-700 hover:to-saffron-600 text-white font-extrabold py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 text-sm flex items-center justify-center space-x-2"
             >
               <Ticket className="w-4 h-4" />
