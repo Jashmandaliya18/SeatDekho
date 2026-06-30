@@ -1,8 +1,30 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { CheckCircle2, Download, Calendar, Clock, MapPin, QrCode, Home, Award } from 'lucide-react';
+import { api } from '../services/api';
 
-export default function TicketPage({ booking, onGoHome }) {
-  React.useEffect(() => {
+export default function TicketPage({ booking: initialBooking, onGoHome }) {
+  const { id } = useParams();
+  const [booking, setBooking] = useState(initialBooking);
+  const [loading, setLoading] = useState(!initialBooking);
+
+  useEffect(() => {
+    if (!booking) {
+      const fetchBooking = async () => {
+        try {
+          const data = await api.get(`/bookings/ticket/${id}`);
+          setBooking(data);
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchBooking();
+    }
+  }, [id, booking]);
+
+  useEffect(() => {
     if (booking) {
       const timer = setTimeout(() => {
         window.print();
@@ -11,7 +33,13 @@ export default function TicketPage({ booking, onGoHome }) {
     }
   }, [booking]);
 
-  if (!booking) return null;
+  if (loading || !booking) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="w-10 h-10 border-4 border-maroon-100 border-t-maroon-800 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   const show = booking.show;
 
@@ -79,9 +107,14 @@ export default function TicketPage({ booking, onGoHome }) {
             </div>
             <div className="space-y-1 col-span-2 border-t border-gray-50 pt-3">
               <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Auditorium Venue</span>
-              <div className="flex items-center space-x-1">
-                <MapPin className="w-3.5 h-3.5 text-saffron-600 shrink-0" />
-                <span className="truncate">{show.venue}</span>
+              <div className="flex flex-col">
+                <div className="flex items-center space-x-1">
+                  <MapPin className="w-3.5 h-3.5 text-saffron-600 shrink-0" />
+                  <span className="font-extrabold text-gray-900">{show.venue}</span>
+                </div>
+                {show.address && (
+                  <span className="block text-[10px] text-gray-500 font-semibold mt-0.5 pl-[18px]">{show.address}</span>
+                )}
               </div>
             </div>
           </div>

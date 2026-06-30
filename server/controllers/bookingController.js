@@ -405,3 +405,15 @@ export const verifyTicket = async (req, res) => {
     res.status(500).json({ error: error.message, message: 'Server error verifying ticket.' });
   }
 };
+
+export const getBookingByBookingId = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ bookingId: req.params.bookingId }).populate('show');
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+    res.json(booking);
+  } catch (error) {
+    res.status(500).json({ error: error.message, message: 'Server error retrieving booking.' });
+  }
+};

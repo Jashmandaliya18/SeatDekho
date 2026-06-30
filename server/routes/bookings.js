@@ -9,6 +9,7 @@ router.get('/my-bookings', auth, bookingController.getMyBookings);
 router.get('/', auth, adminOnly, bookingController.getAllBookings);
 router.put('/:id/cancel', auth, adminOnly, bookingController.cancelBooking);
 router.post('/:id/unlock', bookingController.unlockBooking);
+router.get('/ticket/:bookingId', bookingController.getBookingByBookingId);
 router.post('/verify-ticket', auth, adminOnly, bookingController.verifyTicket);
 
 export default router;

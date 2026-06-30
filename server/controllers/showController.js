@@ -131,8 +131,48 @@ export const updateShow = async (req, res) => {
     if (latitude !== undefined) show.latitude = latitude;
     if (longitude !== undefined) show.longitude = longitude;
     if (categories) show.categories = categories;
-    if (layout) show.layout = layout;
     if (artists) show.artists = artists;
+
+    if (layout) {
+      show.layout = layout;
+      const existingSeats = await Seat.find({ showId: show._id });
+      const existingMap = new Map(existingSeats.map(s => [s.seatNumber, s]));
+      const targetSeatNumbers = new Set();
+      const seatsToInsert = [];
+
+      for (const row of layout) {
+        const categoryPrice = (categories || show.categories).find(c => c.name === row.category)?.price || 0;
+        for (let i = 1; i <= row.seatsCount; i++) {
+          const seatNum = `${row.rowName}-${i}`;
+          targetSeatNumbers.add(seatNum);
+
+          if (!existingMap.has(seatNum)) {
+            seatsToInsert.push({
+              showId: show._id,
+              seatNumber: seatNum,
+              category: row.category,
+              price: categoryPrice,
+              status: 'available'
+            });
+          } else {
+            const existingSeat = existingMap.get(seatNum);
+            existingSeat.category = row.category;
+            existingSeat.price = categoryPrice;
+            await existingSeat.save();
+          }
+        }
+      }
+
+      for (const existingSeat of existingSeats) {
+        if (!targetSeatNumbers.has(existingSeat.seatNumber) && existingSeat.status !== 'booked') {
+          await Seat.findByIdAndDelete(existingSeat._id);
+        }
+      }
+
+      if (seatsToInsert.length > 0) {
+        await Seat.insertMany(seatsToInsert);
+      }
+    }
 
     await show.save();
     res.json(show);

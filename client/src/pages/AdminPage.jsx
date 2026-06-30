@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, Film, Armchair, Library, Plus, Trash2, 
-  X, Check, DollarSign, Calendar, MapPin, Search, Loader2, Edit3 
+  X, Check, DollarSign, Calendar, MapPin, Search, Loader2, Edit3, Download 
 } from 'lucide-react';
 import { api } from '../services/api';
 import VenueMap from '../components/VenueMap';
@@ -324,6 +324,55 @@ export default function AdminPage() {
     } catch (err) {
       setError('Failed to cancel booking.');
     }
+  };
+
+  const handleDownloadSheet = () => {
+    const confirmedBookings = filteredBookings.filter(b => b.bookingStatus === 'confirmed');
+
+    if (confirmedBookings.length === 0) {
+      alert('No confirmed bookings to download.');
+      return;
+    }
+
+    const headers = [
+      'Booking ID',
+      'Customer Name',
+      'Customer Email',
+      'Customer Phone',
+      'Drama Play',
+      'Show Date',
+      'Seat Spot(s)',
+      'Revenue'
+    ];
+
+    const rows = confirmedBookings.map(b => [
+      b.bookingId,
+      b.customerDetails.name,
+      b.customerDetails.email,
+      b.customerDetails.phone,
+      b.show ? b.show.title : 'Deleted Show',
+      b.show ? b.show.date : '',
+      b.seats.join('; '),
+      b.totalAmount
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    const fileName = selectedShowStats 
+      ? `confirmed_bookings_${selectedShowStats.title.toLowerCase().replace(/\s+/g, '_')}.csv`
+      : 'confirmed_bookings.csv';
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   
@@ -1184,15 +1233,24 @@ export default function AdminPage() {
                     </div>
 
                     
-                    <div className="relative w-full sm:w-64">
-                      <input 
-                        type="text" 
-                        placeholder="Search ID, name, email..."
-                        value={bookingSearch}
-                        onChange={(e) => setBookingSearch(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-hidden focus:border-maroon-700 text-xs"
-                      />
-                      <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+                    <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+                      <button
+                        onClick={handleDownloadSheet}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Confirmed Sheet</span>
+                      </button>
+                      <div className="relative w-full sm:w-64">
+                        <input 
+                          type="text" 
+                          placeholder="Search ID, name, email..."
+                          value={bookingSearch}
+                          onChange={(e) => setBookingSearch(e.target.value)}
+                          className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-hidden focus:border-maroon-700 text-xs"
+                        />
+                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+                      </div>
                     </div>
                   </div>
 
@@ -1250,9 +1308,13 @@ export default function AdminPage() {
                               {b.show && <span className="text-[10px] text-gray-450 font-bold block">{b.show.date}</span>}
                             </td>
                             <td className="py-4 px-4 text-center">
-                              <span className="font-black text-gray-800 bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200/50">
-                                {b.seats.join(', ')}
-                              </span>
+                              <div className="flex flex-wrap gap-1 justify-center max-w-[220px] mx-auto">
+                                {b.seats.map(seat => (
+                                  <span key={seat} className="font-black text-gray-800 bg-gray-105 px-2 py-0.5 rounded-md border border-gray-200/60 text-[10px] shrink-0 font-sans">
+                                    {seat}
+                                  </span>
+                                ))}
+                              </div>
                             </td>
                             <td className="py-4 px-4 text-right font-black text-gray-950">₹{b.totalAmount}</td>
                             <td className="py-4 px-4 text-center">

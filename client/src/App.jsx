@@ -107,17 +107,19 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <Navbar 
-        user={user} 
-        onAuthChange={handleAuthChange} 
-        currentView={currentView}
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        showAuthModal={showAuthModal}
-        setShowAuthModal={setShowAuthModal}
-        isRegister={isRegister}
-        setIsRegister={setIsRegister}
-      />
+      <div className="print:hidden">
+        <Navbar 
+          user={user} 
+          onAuthChange={handleAuthChange} 
+          currentView={currentView}
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          showAuthModal={showAuthModal}
+          setShowAuthModal={setShowAuthModal}
+          isRegister={isRegister}
+          setIsRegister={setIsRegister}
+        />
+      </div>
 
       <main className="flex-1">
         {authLoading ? (
@@ -192,12 +194,10 @@ export default function App() {
             <Route 
               path="/ticket/:id" 
               element={
-                finalBooking ? (
-                  <TicketPage 
-                    booking={finalBooking}
-                    onGoHome={handleGoHome}
-                  />
-                ) : <Navigate to="/" />
+                <TicketPage 
+                  booking={finalBooking}
+                  onGoHome={handleGoHome}
+                />
               } 
             />
 
@@ -218,7 +218,9 @@ export default function App() {
         )}
       </main>
 
-      <Footer />
+      <div className="print:hidden">
+        <Footer />
+      </div>
     </div>
   );
 }

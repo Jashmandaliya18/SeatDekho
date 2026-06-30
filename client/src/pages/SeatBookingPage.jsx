@@ -8,6 +8,15 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout, us
   const [currentShow, setCurrentShow] = useState(show);
   const [loadingShow, setLoadingShow] = useState(true);
   const [selectedSeats, setSelectedSeats] = useState([]);
+  const [notification, setNotification] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   useEffect(() => {
     const fetchShowDetails = async () => {
@@ -58,12 +67,14 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout, us
   };
 
   const handleSeatClick = async (seatId) => {
+    if (isProcessing) return;
     if (!user) {
       onAuthRequired();
       return;
     }
     if (currentShow.bookedSeats.includes(seatId)) return;
 
+    setIsProcessing(true);
     const isSelected = selectedSeats.includes(seatId);
 
     if (isSelected) {
@@ -73,10 +84,13 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout, us
       } catch (err) {
         console.error(err);
         setSelectedSeats(prev => [...prev, seatId]);
+      } finally {
+        setIsProcessing(false);
       }
     } else {
       if (selectedSeats.length >= 10) {
-        alert('You can select a maximum of 10 seats.');
+        setNotification({ message: 'You can select a maximum of 10 seats.', type: 'error' });
+        setIsProcessing(false);
         return;
       }
       try {
@@ -85,7 +99,9 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout, us
       } catch (err) {
         console.error(err);
         setSelectedSeats(prev => prev.filter(id => id !== seatId));
-        alert(err.message || 'Failed to lock seat. It may have been locked by another user.');
+        setNotification({ message: err.message || 'Failed to lock seat. It may have been locked by another user.', type: 'error' });
+      } finally {
+        setIsProcessing(false);
       }
     }
   };
@@ -299,6 +315,18 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout, us
         </div>
 
       </div>
+      {notification && (
+        <div className="fixed top-6 right-6 z-[9999] flex items-center space-x-3 bg-gray-900 border-l-4 border-rose-500 text-white px-5 py-4 rounded-xl shadow-2xl transition-transform duration-300 max-w-sm">
+          <div className="bg-rose-500/20 p-1.5 rounded-lg text-rose-400 shrink-0">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <p className="text-xs font-black tracking-wide text-gray-100">{notification.message}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
