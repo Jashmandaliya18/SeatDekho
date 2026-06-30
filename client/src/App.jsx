@@ -11,6 +11,7 @@ import TicketPage from './pages/TicketPage';
 import AdminPage from './pages/AdminPage';
 import ProfilePage from './pages/ProfilePage';
 import { api } from './services/api';
+import ToastContainer from './components/ToastContainer';
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -220,6 +221,7 @@ export default function App() {
 
       <div className="print:hidden">
         <Footer />
+        <ToastContainer />
       </div>
     </div>
   );

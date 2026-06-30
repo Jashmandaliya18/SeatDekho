@@ -207,13 +207,13 @@ export default function SeatBookingPage({ show, onBack, onContinueToCheckout, us
                             const isOtherLocked = currentShow.otherUserLocks?.includes(seatId);
                             const isSelected = selectedSeats.includes(seatId);
 
-                            let seatColor = 'bg-emerald-500 border-emerald-600 text-white hover:bg-emerald-650';
+                            let seatColor = 'bg-emerald-500 border-emerald-600 text-white hover:bg-emerald-650 hover:scale-110 active:scale-90';
                             if (isBooked) {
                               seatColor = 'bg-gray-200 border-gray-300 text-gray-400 cursor-not-allowed';
                             } else if (isOtherLocked) {
                               seatColor = 'bg-amber-500 border-amber-600 text-white cursor-not-allowed animate-pulse';
                             } else if (isSelected) {
-                              seatColor = 'bg-blue-600 border-blue-750 text-white hover:bg-blue-700 shadow-sm';
+                              seatColor = 'bg-blue-600 border-blue-750 text-white hover:bg-blue-700 shadow-sm scale-110 active:scale-90';
                             }
 
                             const offset = maxSeats - row.seatsCount;

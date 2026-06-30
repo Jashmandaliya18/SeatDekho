@@ -4,6 +4,16 @@ import { Calendar, Clock, MapPin, ArrowLeft, Ticket, User, Film, Info } from 'lu
 import VenueMap from '../components/VenueMap';
 import { api } from '../services/api';
 
+const isShowUpcoming = (showDateStr) => {
+  if (!showDateStr) return false;
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+  return showDateStr >= todayStr;
+};
+
 export default function ShowDetailsPage({ show: initialShow, onBack, onBookSeats }) {
   const { id } = useParams();
   const [currentShow, setCurrentShow] = useState(initialShow);
@@ -121,9 +131,18 @@ export default function ShowDetailsPage({ show: initialShow, onBack, onBookSeats
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-maroon-900 leading-tight">
-              {show.title}
-            </h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-maroon-900 leading-tight">
+                {show.title}
+              </h1>
+              <span className={`text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase border ${
+                isShowUpcoming(show.date)
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-250 animate-pulse'
+                  : 'bg-gray-100 text-gray-550 border-gray-200'
+              }`}>
+                {isShowUpcoming(show.date) ? 'Upcoming' : 'Completed'}
+              </span>
+            </div>
 
             <p className="text-sm sm:text-base text-gray-600 leading-relaxed font-medium">
               {show.description}
@@ -304,13 +323,23 @@ export default function ShowDetailsPage({ show: initialShow, onBack, onBookSeats
             </div>
 
             
-            <button 
-              onClick={() => onBookSeats(show)}
-              className="w-full bg-gradient-to-r from-saffron-600 to-saffron-500 hover:from-saffron-700 hover:to-saffron-600 text-white font-extrabold py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 text-sm flex items-center justify-center space-x-2"
-            >
-              <Ticket className="w-4 h-4" />
-              <span>Book Seats Now</span>
-            </button>
+            {isShowUpcoming(show.date) ? (
+              <button 
+                onClick={() => onBookSeats(show)}
+                className="w-full bg-gradient-to-r from-saffron-600 to-saffron-500 hover:from-saffron-700 hover:to-saffron-600 text-white font-extrabold py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 text-sm flex items-center justify-center space-x-2 cursor-pointer"
+              >
+                <Ticket className="w-4 h-4" />
+                <span>Book Seats Now</span>
+              </button>
+            ) : (
+              <button 
+                disabled
+                className="w-full bg-gray-150 text-gray-400 border border-gray-200 font-extrabold py-3.5 rounded-xl text-sm flex items-center justify-center space-x-2 cursor-not-allowed"
+              >
+                <Ticket className="w-4 h-4 text-gray-400" />
+                <span>Show Completed (Booking Closed)</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

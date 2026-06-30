@@ -293,7 +293,7 @@ export default function ProfilePage() {
                       </span>
                       {booking.bookingStatus === 'confirmed' && (
                         <button
-                          onClick={() => navigate(`/ticket/${booking.bookingId}`, { state: { booking } })}
+                          onClick={() => navigate(`/ticket/${booking.bookingId}`, { state: { booking, from: 'profile' } })}
                           className="px-3 py-1.5 bg-maroon-800 hover:bg-maroon-900 text-white text-[10px] font-black rounded-lg transition-colors shadow-3xs"
                         >
                           View Ticket

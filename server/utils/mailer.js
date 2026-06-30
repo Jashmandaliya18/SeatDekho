@@ -14,13 +14,13 @@ export const sendConfirmationEmail = async (booking, show) => {
     });
 
     const mailOptions = {
-      from: `"SeatBook Tickets" <${SENDER_EMAIL}>`,
+      from: `"SeatDekho Tickets" <${SENDER_EMAIL}>`,
       to: booking.customerDetails.email,
       subject: `Booking Confirmed! Your Ticket for ${show.title} - ${booking.bookingId}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #fcfcfc;">
           <div style="text-align: center; border-bottom: 2px solid #800020; padding-bottom: 15px; margin-bottom: 20px;">
-            <h1 style="color: #800020; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 0.05em;">SEATBOOK / રંગમંચ</h1>
+            <h1 style="color: #800020; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 0.05em;">SeatDekho</h1>
             <p style="color: #6b7280; margin: 5px 0 0 0; font-size: 12px;">Official Booking Confirmation</p>
           </div>
           
@@ -45,7 +45,7 @@ export const sendConfirmationEmail = async (booking, show) => {
               </tr>
               <tr>
                 <td style="padding: 6px 0; color: #6b7280; font-weight: bold;">Venue</td>
-                <td style="padding: 6px 0; color: #111827; text-align: right; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${show.venue}</td>
+                <td style="padding: 6px 0; color: #111827; text-align: right;">${show.venue}${show.address ? `, ${show.address}` : ''}</td>
               </tr>
               <tr>
                 <td style="padding: 6px 0; color: #6b7280; font-weight: bold;">Assigned Seats</td>
@@ -60,20 +60,21 @@ export const sendConfirmationEmail = async (booking, show) => {
 
           <div style="text-align: center; margin-top: 25px; padding: 15px; background-color: #fafafa; border-radius: 8px;">
             <p style="margin: 0 0 10px 0; font-size: 11px; color: #6b7280; font-weight: bold; uppercase;">SCAN THIS CODE AT THE ENTRANCE GATE</p>
-            <img src="cid:qrcode" alt="Entry QR Ticket" style="width: 180px; height: 180px; border: 1px solid #e5e7eb; padding: 5px; border-radius: 8px; background-color: #fff;" />
+            <div style="display: inline-block; width: 180px; height: 180px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff; background-image: url('cid:qrcode'); background-repeat: no-repeat; background-position: center; background-size: 170px 170px; pointer-events: none; -webkit-user-drag: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;" title="Entry QR Ticket"></div>
             <p style="margin: 10px 0 0 0; font-size: 10px; color: #9ca3af;">Please show this email/QR code on your smartphone at the ticket box office check-in.</p>
           </div>
 
           <div style="margin-top: 30px; border-top: 1px solid #f3f4f6; padding-top: 15px; font-size: 11px; color: #9ca3af; text-align: center;">
             <p style="margin: 0 0 5px 0;">Need assistance? Contact our helpline at +91 79 2658 8900.</p>
-            <p style="margin: 0;">&copy; ${new Date().getFullYear()} SeatBook Platform. All rights reserved.</p>
+            <p style="margin: 0;">&copy; ${new Date().getFullYear()} SeatDekho Platform. All rights reserved.</p>
           </div>
         </div>
       `,
       attachments: [{
         filename: `ticket-${booking.bookingId}.png`,
         path: booking.qrCodeUrl, 
-        cid: 'qrcode'
+        cid: 'qrcode',
+        contentDisposition: 'inline'
       }]
     };
 
@@ -90,19 +91,19 @@ export const sendConfirmationEmail = async (booking, show) => {
 export const sendOTPEmail = async (email, otp) => {
   try {
     const mailOptions = {
-      from: `"SeatBook Verification" <${SENDER_EMAIL}>`,
+      from: `"SeatDekho Verification" <${SENDER_EMAIL}>`,
       to: email,
-      subject: `SeatBook - OTP Verification Code: ${otp}`,
+      subject: `SeatDekho - OTP Verification Code: ${otp}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #fcfcfc;">
           <div style="text-align: center; border-bottom: 2px solid #800020; padding-bottom: 15px; margin-bottom: 20px;">
-            <h1 style="color: #800020; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 0.05em;">SEATBOOK / રંગમંચ</h1>
+            <h1 style="color: #800020; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 0.05em;">SeatDekho</h1>
             <p style="color: #6b7280; margin: 5px 0 0 0; font-size: 12px;">OTP Verification Code</p>
           </div>
           
           <div style="margin-bottom: 20px;">
             <p style="font-size: 14px; color: #374151; font-weight: bold;">Hello,</p>
-            <p style="font-size: 13px; color: #4b5563; line-height: 1.6;">You are attempting to register or log in to SeatBook. Please use the following One-Time Password (OTP) to complete the verification process.</p>
+            <p style="font-size: 13px; color: #4b5563; line-height: 1.6;">You are attempting to register or log in to SeatDekho. Please use the following One-Time Password (OTP) to complete the verification process.</p>
           </div>
 
           <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f3f4f6; border-radius: 8px;">
@@ -112,7 +113,7 @@ export const sendOTPEmail = async (email, otp) => {
 
           <div style="margin-top: 30px; border-top: 1px solid #f3f4f6; padding-top: 15px; font-size: 11px; color: #9ca3af; text-align: center;">
             <p style="margin: 0 0 5px 0;">If you did not request this verification code, please ignore this email.</p>
-            <p style="margin: 0;">&copy; ${new Date().getFullYear()} SeatBook Platform. All rights reserved.</p>
+            <p style="margin: 0;">&copy; ${new Date().getFullYear()} SeatDekho Platform. All rights reserved.</p>
           </div>
         </div>
       `

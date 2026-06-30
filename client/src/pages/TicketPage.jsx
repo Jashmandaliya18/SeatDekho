@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Download, Calendar, Clock, MapPin, QrCode, Home, Award } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function TicketPage({ booking: initialBooking, onGoHome }) {
   const { id } = useParams();
-  const [booking, setBooking] = useState(initialBooking);
-  const [loading, setLoading] = useState(!initialBooking);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const stateBooking = location.state?.booking;
+  const [booking, setBooking] = useState(initialBooking || stateBooking || null);
+  const [loading, setLoading] = useState(!booking);
 
   useEffect(() => {
     if (!booking) {
@@ -24,14 +28,7 @@ export default function TicketPage({ booking: initialBooking, onGoHome }) {
     }
   }, [id, booking]);
 
-  useEffect(() => {
-    if (booking) {
-      const timer = setTimeout(() => {
-        window.print();
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [booking]);
+
 
   if (loading || !booking) {
     return (
@@ -49,8 +46,56 @@ export default function TicketPage({ booking: initialBooking, onGoHome }) {
     return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  const handlePrint = () => {
-    window.print();
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    const card = document.getElementById('ticket-receipt-card');
+    if (!card) return;
+    setDownloading(true);
+    try {
+      const { toPng } = await import('html-to-image');
+      const { jsPDF } = await import('jspdf');
+
+      const width = card.offsetWidth;
+      const height = card.offsetHeight;
+
+      const dataUrl = await toPng(card, {
+        pixelRatio: 2,
+        cacheBust: true
+      });
+
+      const pdf = new jsPDF({
+        orientation: width > height ? 'l' : 'p',
+        unit: 'px',
+        format: [width, height]
+      });
+
+      pdf.addImage(dataUrl, 'PNG', 0, 0, width, height);
+      pdf.save(`ticket-${booking.bookingId}.pdf`);
+
+      if (window.showToast) {
+        window.showToast('Ticket PDF downloaded successfully!', 'success');
+      }
+    } catch (err) {
+      console.error('Failed to download ticket PDF:', err);
+      if (window.showToast) {
+        window.showToast('Failed to download ticket PDF.', 'error');
+      } else {
+        alert('Failed to download ticket PDF.');
+      }
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const fromProfile = location.state?.from === 'profile';
+
+  const handleBack = () => {
+    if (fromProfile) {
+      navigate('/profile');
+    } else {
+      onGoHome();
+    }
   };
 
   return (
@@ -68,7 +113,7 @@ export default function TicketPage({ booking: initialBooking, onGoHome }) {
       </div>
 
       
-      <div className="relative bg-white border border-gray-200 rounded-3xl shadow-lg overflow-hidden flex flex-col md:flex-row print:shadow-none print:border print:rounded-2xl">
+      <div id="ticket-receipt-card" className="relative bg-white border border-gray-200 rounded-3xl shadow-lg overflow-hidden flex flex-col md:flex-row print:shadow-none print:border print:rounded-2xl">
         
         
         <div className="flex-1 p-6 sm:p-8 space-y-6">
@@ -165,19 +210,20 @@ export default function TicketPage({ booking: initialBooking, onGoHome }) {
       
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-center pt-2 print:hidden">
         <button 
-          onClick={onGoHome}
+          onClick={handleBack}
           className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 text-sm font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:bg-gray-50 px-6 py-3 rounded-xl shadow-xs transition-colors"
         >
           <Home className="w-4 h-4" />
-          <span>Back to Home</span>
+          <span>{fromProfile ? 'Back to Profile' : 'Back to Home'}</span>
         </button>
 
         <button 
-          onClick={handlePrint}
-          className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 text-sm font-bold text-white bg-gradient-to-r from-saffron-600 to-saffron-500 hover:from-saffron-700 hover:to-saffron-600 px-6 py-3 rounded-xl shadow-md hover:shadow-lg transition-all"
+          onClick={handleDownload}
+          disabled={downloading}
+          className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 text-sm font-bold text-white bg-gradient-to-r from-saffron-600 to-saffron-500 hover:from-saffron-700 hover:to-saffron-600 px-6 py-3 rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-50"
         >
           <Download className="w-4 h-4" />
-          <span>Download / Print Ticket</span>
+          <span>{downloading ? 'Downloading...' : 'Download Ticket'}</span>
         </button>
       </div>
 

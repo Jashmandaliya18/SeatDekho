@@ -2,6 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Calendar, Clock, Sparkles, SlidersHorizontal, Loader2 } from 'lucide-react';
 import { api } from '../services/api';
 
+const isShowUpcoming = (showDateStr) => {
+  if (!showDateStr) return false;
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+  return showDateStr >= todayStr;
+};
+
 export default function HomePage({ onSelectShow, setView, searchTerm, setSearchTerm }) {
   const [shows, setShows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -83,8 +93,10 @@ export default function HomePage({ onSelectShow, setView, searchTerm, setSearchT
               alt={featuredShow.title} 
               className="w-full aspect-video md:aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500"
             />
-            <div className="absolute top-3 left-3 bg-saffron-500 text-white text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase shadow-sm">
-              Featured Drama
+            <div className={`absolute top-3 left-3 text-white text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase shadow-sm ${
+              isShowUpcoming(featuredShow.date) ? 'bg-saffron-500' : 'bg-gray-500'
+            }`}>
+              Featured {isShowUpcoming(featuredShow.date) ? 'Upcoming' : 'Completed'}
             </div>
           </div>
 
@@ -121,9 +133,13 @@ export default function HomePage({ onSelectShow, setView, searchTerm, setSearchT
               </div>
               <button 
                 onClick={() => onSelectShow(featuredShow)}
-                className="w-full sm:w-auto bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-600 hover:to-saffron-700 text-white font-extrabold px-8 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 text-sm"
+                className={`w-full sm:w-auto font-extrabold px-8 py-3.5 rounded-xl shadow-lg transition-all duration-200 text-sm ${
+                  isShowUpcoming(featuredShow.date)
+                    ? 'bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-600 hover:to-saffron-700 text-white hover:shadow-xl hover:-translate-y-0.5 cursor-pointer'
+                    : 'bg-gray-250 hover:bg-gray-300 text-gray-650 border border-gray-300 shadow-none'
+                }`}
               >
-                Book Tickets Now
+                {isShowUpcoming(featuredShow.date) ? 'Book Tickets Now' : 'View Completed Show'}
               </button>
             </div>
           </div>
@@ -217,7 +233,7 @@ export default function HomePage({ onSelectShow, setView, searchTerm, setSearchT
             {filteredShows.map(show => (
               <div 
                 key={show._id}
-                className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col group"
+                className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-xs hover:shadow-lg hover:-translate-y-1.5 transition-all duration-300 flex flex-col group"
               >
                 
                 <div className="relative aspect-video sm:aspect-[4/3] w-full overflow-hidden bg-gray-100 shrink-0">
@@ -226,6 +242,13 @@ export default function HomePage({ onSelectShow, setView, searchTerm, setSearchT
                     alt={show.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
+                  <div className={`absolute top-3 left-3 backdrop-blur-xs px-2.5 py-1 rounded-full shadow-xs text-[9px] font-black tracking-widest uppercase border ${
+                    isShowUpcoming(show.date)
+                      ? 'bg-emerald-500/90 border-emerald-400 text-white animate-pulse'
+                      : 'bg-gray-500/90 border-gray-400 text-white'
+                  }`}>
+                    {isShowUpcoming(show.date) ? 'Upcoming' : 'Completed'}
+                  </div>
                   <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full shadow-xs flex items-center space-x-1">
                     <MapPin className="w-3.5 h-3.5 text-maroon-800 shrink-0" />
                     <span className="text-[10px] font-bold text-gray-800">{show.venue.split(',')[0]}</span>
@@ -262,9 +285,13 @@ export default function HomePage({ onSelectShow, setView, searchTerm, setSearchT
                       </div>
                       <button 
                         onClick={() => onSelectShow(show)}
-                        className="bg-maroon-800 hover:bg-maroon-900 group-hover:bg-gradient-to-r group-hover:from-maroon-800 group-hover:to-maroon-700 text-white font-extrabold px-4.5 py-2 rounded-xl text-xs shadow-xs group-hover:shadow-md transition-all duration-200"
+                        className={`font-extrabold px-4.5 py-2 rounded-xl text-xs transition-all duration-200 transition-colors shadow-xs ${
+                          isShowUpcoming(show.date)
+                            ? 'bg-maroon-800 hover:bg-maroon-900 group-hover:bg-gradient-to-r group-hover:from-maroon-800 group-hover:to-maroon-700 text-white group-hover:shadow-md cursor-pointer'
+                            : 'bg-gray-150 hover:bg-gray-205 text-gray-650 border border-gray-200 shadow-none'
+                        }`}
                       >
-                        Book Now
+                        {isShowUpcoming(show.date) ? 'Book Now' : 'Details / Completed'}
                       </button>
                     </div>
                   </div>

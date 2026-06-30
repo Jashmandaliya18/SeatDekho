@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, Film, Armchair, Library, Plus, Trash2, 
-  X, Check, DollarSign, Calendar, MapPin, Search, Loader2, Edit3, Download 
+  X, Check, DollarSign, Calendar, MapPin, Search, Loader2, Edit3, Download,
+  ShieldAlert
 } from 'lucide-react';
 import { api } from '../services/api';
 import VenueMap from '../components/VenueMap';
+import { toast } from '../services/toast';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -13,6 +15,12 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null
+  });
 
   
   const [showTitle, setShowTitle] = useState('');
@@ -82,7 +90,7 @@ export default function AdminPage() {
     
     const formattedName = newCatName.trim();
     if (showCategories.some(c => c.name.toLowerCase() === formattedName.toLowerCase())) {
-      alert('This category name already exists!');
+      toast.error('This category name already exists!');
       return;
     }
 
@@ -94,7 +102,7 @@ export default function AdminPage() {
   
   const handleRemoveCategory = (nameToRemove) => {
     if (showCategories.length <= 1) {
-      alert('A show must configure at least one pricing category!');
+      toast.error('A show must configure at least one pricing category!');
       return;
     }
     const updated = showCategories.filter(c => c.name !== nameToRemove);
@@ -279,7 +287,7 @@ export default function AdminPage() {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Please select a valid image file (PNG, JPG, etc.).');
+      toast.error('Please select a valid image file (PNG, JPG, etc.).');
       return;
     }
 
@@ -297,21 +305,35 @@ export default function AdminPage() {
   };
 
   
+  const handleDeleteShowClick = (id, title) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Drama Show',
+      message: `Are you sure you want to delete "${title}"? This will permanently remove all associated ticket slots and data.`,
+      onConfirm: () => handleDeleteShow(id, title)
+    });
+  };
+
   const handleDeleteShow = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}"? This will remove all associated ticket slots.`)) return;
     try {
       await api.delete(`/shows/${id}`);
       setShows(shows.filter(s => s._id !== id));
-      setSuccessMsg(`Show "${title}" deleted.`);
-      setTimeout(() => setSuccessMsg(''), 3000);
+      toast.success(`Show "${title}" deleted.`);
     } catch (err) {
-      setError('Failed to delete show.');
+      toast.error('Failed to delete show.');
     }
   };
 
-  
+  const handleCancelBookingClick = (id, bookingId) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Cancel Booking',
+      message: `Cancel Booking ${bookingId} and release seats?`,
+      onConfirm: () => handleCancelBooking(id, bookingId)
+    });
+  };
+
   const handleCancelBooking = async (id, bookingId) => {
-    if (!window.confirm(`Cancel Booking ${bookingId} and release seats?`)) return;
     try {
       await api.put(`/bookings/${id}/cancel`);
       setBookings(bookings.map(b => b._id === id ? { ...b, bookingStatus: 'cancelled' } : b));
@@ -319,10 +341,9 @@ export default function AdminPage() {
       const showsData = await api.get('/shows');
       setShows(showsData);
       
-      setSuccessMsg(`Booking ${bookingId} cancelled.`);
-      setTimeout(() => setSuccessMsg(''), 3000);
+      toast.success(`Booking ${bookingId} cancelled.`);
     } catch (err) {
-      setError('Failed to cancel booking.');
+      toast.error('Failed to cancel booking.');
     }
   };
 
@@ -330,7 +351,7 @@ export default function AdminPage() {
     const confirmedBookings = filteredBookings.filter(b => b.bookingStatus === 'confirmed');
 
     if (confirmedBookings.length === 0) {
-      alert('No confirmed bookings to download.');
+      toast.info('No confirmed bookings to download.');
       return;
     }
 
@@ -1089,9 +1110,8 @@ export default function AdminPage() {
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
-
                         <button 
-                          onClick={() => handleDeleteShow(show._id, show.title)}
+                          onClick={() => handleDeleteShowClick(show._id, show.title)}
                           className="p-1.5 bg-red-50 hover:bg-red-100 text-red-650 hover:text-red-700 rounded-lg transition-colors border border-red-100"
                           title="Delete Drama Show"
                         >
@@ -1329,8 +1349,8 @@ export default function AdminPage() {
                             <td className="py-4 px-4 text-center">
                               {b.bookingStatus === 'confirmed' ? (
                                 <button
-                                  onClick={() => handleCancelBooking(b._id, b.bookingId)}
-                                  className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 hover:text-red-700 rounded-lg transition-colors font-bold border border-red-150"
+                                  onClick={() => handleCancelBookingClick(b._id, b.bookingId)}
+                                  className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 hover:text-red-700 rounded-lg transition-colors font-bold border border-red-155"
                                 >
                                   Cancel
                                 </button>
@@ -1368,6 +1388,41 @@ export default function AdminPage() {
             </svg>
             <h3 className="text-lg font-black text-maroon-900 leading-tight">Success Acknowledgement</h3>
             <p className="text-xs text-gray-500 font-bold leading-relaxed">{successOverlayMessage}</p>
+          </div>
+        </div>
+      )}
+
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-backdrop-fade-in">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-scale-up">
+            <div className="p-6 sm:p-8 space-y-6">
+              <div className="flex items-center space-x-3 text-red-600">
+                <div className="p-2 bg-red-50 rounded-full border border-red-100">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-black text-gray-900">{confirmDialog.title}</h3>
+              </div>
+              <p className="text-sm text-gray-600 leading-relaxed font-medium">
+                {confirmDialog.message}
+              </p>
+              <div className="flex space-x-3 pt-2">
+                <button 
+                  onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold text-sm rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    confirmDialog.onConfirm();
+                    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                  }}
+                  className="flex-1 py-3 bg-red-600 hover:bg-red-750 text-white font-bold text-sm rounded-xl shadow-xs transition-colors"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

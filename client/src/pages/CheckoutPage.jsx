@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, User, Mail, Phone, Ticket, ShieldCheck, HelpCircle } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, Ticket, ShieldCheck, HelpCircle, MapPin } from 'lucide-react';
 import MockPaymentModal from '../components/MockPaymentModal';
 import { api } from '../services/api';
 
@@ -58,7 +58,7 @@ export default function CheckoutPage({ show, selectedSeats, totalAmount, user, o
             key: rzpKey,
             amount: order.amount,
             currency: order.currency,
-            name: 'SeatBook / રંગમંચ',
+            name: 'SeatDekho',
             description: `Tickets for ${show.title}`,
             order_id: order.id,
             handler: function (response) {
@@ -254,6 +254,13 @@ export default function CheckoutPage({ show, selectedSeats, totalAmount, user, o
             </div>
 
             <div className="space-y-3">
+              <div className="flex justify-between items-center text-xs font-bold text-gray-600 border-b border-gray-50 pb-2">
+                <span className="flex items-center space-x-1">
+                  <MapPin className="w-4 h-4 text-maroon-800" />
+                  <span>Venue</span>
+                </span>
+                <span className="text-gray-800 break-words max-w-[150px] text-right">{show.venue}</span>
+              </div>
               <div className="flex justify-between items-center text-xs font-bold text-gray-600 border-b border-gray-50 pb-2">
                 <span className="flex items-center space-x-1">
                   <Ticket className="w-4 h-4 text-maroon-800" />
