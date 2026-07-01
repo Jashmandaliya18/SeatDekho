@@ -14,6 +14,14 @@ import { errorHandler } from './middleware/error.js';
 
 dotenv.config({ path: path.resolve(import.meta.dirname, '../.env') });
 
+// Verify Razorpay env vars strictly at startup - fail fast if missing
+const requiredEnvVars = ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET'];
+for (const varName of requiredEnvVars) {
+  if (!process.env[varName]) {
+    throw new Error(`CRITICAL STARTUP ERROR: Environment variable ${varName} is missing. Refusing to boot.`);
+  }
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -26,7 +34,12 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 

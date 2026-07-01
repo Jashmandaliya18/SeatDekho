@@ -236,20 +236,27 @@ export default function HomePage({ onSelectShow, setView, searchTerm, setSearchT
                 className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-xs hover:shadow-lg hover:-translate-y-1.5 transition-all duration-300 flex flex-col group"
               >
                 
-                <div className="relative aspect-video sm:aspect-[4/3] w-full overflow-hidden bg-gray-100 shrink-0">
+                <div className="relative aspect-video sm:aspect-[4/3] w-full overflow-hidden bg-gray-950 shrink-0 flex items-center justify-center">
+                  {/* Ambient Blurred Glow */}
+                  <img 
+                    src={show.poster} 
+                    alt="" 
+                    className="absolute inset-0 w-full h-full object-cover filter blur-lg opacity-40 scale-110 select-none pointer-events-none" 
+                  />
+                  {/* Foreground Poster */}
                   <img 
                     src={show.poster} 
                     alt={show.title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    className="relative z-10 max-w-full max-h-full object-contain group-hover:scale-[1.03] transition-transform duration-500"
                   />
-                  <div className={`absolute top-3 left-3 backdrop-blur-xs px-2.5 py-1 rounded-full shadow-xs text-[9px] font-black tracking-widest uppercase border ${
+                  <div className={`absolute top-3 left-3 z-20 backdrop-blur-xs px-2.5 py-1 rounded-full shadow-xs text-[9px] font-black tracking-widest uppercase border ${
                     isShowUpcoming(show.date)
                       ? 'bg-emerald-500/90 border-emerald-400 text-white animate-pulse'
                       : 'bg-gray-500/90 border-gray-400 text-white'
                   }`}>
                     {isShowUpcoming(show.date) ? 'Upcoming' : 'Completed'}
                   </div>
-                  <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full shadow-xs flex items-center space-x-1">
+                  <div className="absolute top-3 right-3 z-20 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full shadow-xs flex items-center space-x-1">
                     <MapPin className="w-3.5 h-3.5 text-maroon-800 shrink-0" />
                     <span className="text-[10px] font-bold text-gray-800">{show.venue.split(',')[0]}</span>
                   </div>

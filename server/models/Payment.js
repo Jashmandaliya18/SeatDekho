@@ -23,9 +23,27 @@ const paymentSchema = new mongoose.Schema({
     type: Number, 
     required: true
   },
+  currency: {
+    type: String,
+    default: 'INR',
+    required: true
+  },
+  method: {
+    type: String,
+    default: null
+  },
   status: {
     type: String,
-    enum: ['created', 'captured', 'failed', 'refunded'],
+    enum: [
+      'created',
+      'pending_webhook_confirmation',
+      'paid',
+      'captured',
+      'failed',
+      'refund_initiated',
+      'refunded',
+      'refund_failed'
+    ],
     default: 'created',
     required: true
   },

@@ -8,7 +8,22 @@ import { api } from '../services/api';
 import VenueMap from '../components/VenueMap';
 import { toast } from '../services/toast';
 
+const CATEGORY_COLORS = [
+  { bg: 'bg-indigo-500', border: 'border-indigo-600' },
+  { bg: 'bg-saffron-500', border: 'border-saffron-600' },
+  { bg: 'bg-slate-400', border: 'border-slate-500' },
+  { bg: 'bg-emerald-500', border: 'border-emerald-600' },
+  { bg: 'bg-violet-600', border: 'border-violet-750' },
+  { bg: 'bg-pink-600', border: 'border-pink-700' },
+  { bg: 'bg-cyan-500', border: 'border-cyan-600' }
+];
+
 export default function AdminPage() {
+  const getCategoryColor = (categoryName) => {
+    const idx = showCategories.findIndex(c => c.name === categoryName);
+    if (idx === -1) return { bg: 'bg-slate-400', border: 'border-slate-500' };
+    return CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
+  };
   const [activeTab, setActiveTab] = useState('overview');
   const [shows, setShows] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -142,7 +157,7 @@ export default function AdminPage() {
       if (idx === index) {
         return {
           ...row,
-          [field]: field === 'seatsCount' ? Math.min(25, Math.max(1, Number(value))) : value
+          [field]: field === 'seatsCount' ? Math.min(100, Math.max(1, Number(value))) : value
         };
       }
       return row;
@@ -833,9 +848,7 @@ export default function AdminPage() {
                           key={cat.name} 
                           className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 shadow-3xs"
                         >
-                          <span className={`w-2 h-2 rounded-full ${
-                            cat.name === 'VIP' ? 'bg-gold-500' : cat.name === 'Gold' ? 'bg-saffron-500' : 'bg-slate-400'
-                          }`}></span>
+                          <span className={`w-2 h-2 rounded-full ${getCategoryColor(cat.name).bg}`}></span>
                           <span>{cat.name}:</span>
                           <span className="text-maroon-900 font-extrabold">₹{cat.price}</span>
                           <button
@@ -938,7 +951,7 @@ export default function AdminPage() {
                                   <input 
                                     type="number" 
                                     min="1"
-                                    max="25"
+                                    max="100"
                                     value={row.seatsCount}
                                     onChange={(e) => handleBuilderRowChange(idx, 'seatsCount', e.target.value)}
                                     className="w-full text-xs font-bold focus:outline-hidden text-center bg-transparent"
@@ -992,22 +1005,22 @@ export default function AdminPage() {
                         </div>
 
                         
-                        <div className="w-full space-y-2 overflow-x-auto pb-2 text-center">
-                          <div className="min-w-[200px] flex flex-col space-y-1.5">
+                        {/* Seating Layout Preview */}
+                        <div className="w-full space-y-2 overflow-x-auto pb-3 text-center scrollbar-thin">
+                          <div className="inline-flex flex-col space-y-1.5 min-w-max mx-auto px-4">
                             {(() => {
-                              const maxBuilderSeats = Math.max(...builderRows.map(r => Math.min(r.seatsCount, 15)), 1);
+                              const maxBuilderSeats = Math.max(...builderRows.map(r => r.seatsCount), 1);
                               return builderRows.map((row, idx) => {
-                                let seatColor = 'bg-slate-400 border-slate-500 text-white';
-                                if (row.category === 'VIP') seatColor = 'bg-gold-500 border-gold-600 text-white';
-                                if (row.category === 'Gold') seatColor = 'bg-saffron-500 border-saffron-600 text-white';
+                                const colorObj = getCategoryColor(row.category);
+                                const seatColor = `${colorObj.bg} ${colorObj.border} text-white`;
 
                                 return (
                                   <div key={idx} className="flex items-center justify-center space-x-2">
                                     <span className="text-[10px] font-black text-gray-800 w-4 shrink-0">{row.rowName}</span>
                                     <div className="flex items-center justify-center">
                                       <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${maxBuilderSeats * 2}, 0.3125rem)` }}>
-                                        {Array.from({ length: Math.min(row.seatsCount, 15) }, (_, seatIndex) => {
-                                          const offset = maxBuilderSeats - Math.min(row.seatsCount, 15);
+                                        {Array.from({ length: row.seatsCount }, (_, seatIndex) => {
+                                          const offset = maxBuilderSeats - row.seatsCount;
                                           const style = {
                                             gridColumn: seatIndex === 0 ? `${offset + 1} / span 2` : 'span 2'
                                           };
@@ -1020,7 +1033,6 @@ export default function AdminPage() {
                                           );
                                         })}
                                       </div>
-                                      {row.seatsCount > 15 && <span className="text-[8px] text-gray-400 font-bold pl-1 shrink-0">+{row.seatsCount - 15}</span>}
                                     </div>
                                     <span className="text-[10px] font-black text-gray-800 w-4 text-right shrink-0">{row.rowName}</span>
                                   </div>
@@ -1030,19 +1042,16 @@ export default function AdminPage() {
                           </div>
                         </div>
 
-                        <div className="mt-4 border-t border-gray-200 pt-2 w-full flex justify-center gap-3 text-[8px] font-bold text-gray-400">
-                          <div className="flex items-center space-x-1">
-                            <span className="w-2.5 h-2.5 bg-gold-500 rounded-sm"></span>
-                            <span>VIP</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <span className="w-2.5 h-2.5 bg-saffron-500 rounded-sm"></span>
-                            <span>Gold</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <span className="w-2.5 h-2.5 bg-slate-400 rounded-sm"></span>
-                            <span>Silver/Other</span>
-                          </div>
+                        <div className="mt-4 border-t border-gray-200 pt-2 w-full flex flex-wrap justify-center gap-3 text-[8px] font-bold text-gray-400">
+                          {showCategories.map((cat, idx) => {
+                            const colorObj = CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
+                            return (
+                              <div key={cat.name} className="flex items-center space-x-1">
+                                <span className={`w-2.5 h-2.5 rounded-sm ${colorObj.bg}`}></span>
+                                <span>{cat.name}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>

@@ -111,11 +111,18 @@ export default function ShowDetailsPage({ show: initialShow, onBack, onBookSeats
       <div className="bg-white border border-gray-100 rounded-3xl shadow-xs overflow-hidden flex flex-col md:flex-row gap-8 p-6 sm:p-8 relative">
         
         
-        <div className="w-full md:w-80 shrink-0 rounded-2xl overflow-hidden shadow-md border border-gray-100">
+        <div className="w-full md:w-80 shrink-0 rounded-2xl overflow-hidden shadow-md border border-gray-100 relative aspect-[3/4] bg-gray-950 flex items-center justify-center">
+          {/* Ambient Blurred Glow */}
+          <img 
+            src={show.poster} 
+            alt="" 
+            className="absolute inset-0 w-full h-full object-cover filter blur-lg opacity-40 scale-110 select-none pointer-events-none" 
+          />
+          {/* Foreground Poster */}
           <img 
             src={show.poster} 
             alt={show.title} 
-            className="w-full aspect-[3/4] object-cover"
+            className="relative z-10 max-w-full max-h-full object-contain"
           />
         </div>
 
@@ -300,9 +307,6 @@ export default function ShowDetailsPage({ show: initialShow, onBack, onBookSeats
                     <div className="flex items-center space-x-2.5">
                       <span className={`text-[10px] font-black tracking-widest px-2.5 py-0.5 rounded-md border ${colorClass}`}>
                         {cat.name}
-                      </span>
-                      <span className="text-xs text-gray-400 font-bold">
-                        {cat.name === 'VIP' ? 'Front Rows' : cat.name === 'Gold' ? 'Middle Rows' : 'Balcony/Back Rows'}
                       </span>
                     </div>
                     <span className="text-base font-black text-gray-850">

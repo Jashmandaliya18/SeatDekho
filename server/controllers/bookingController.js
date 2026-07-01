@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
 import Show from '../models/Show.js';
 import Seat from '../models/Seat.js';
@@ -6,17 +7,8 @@ import jwt from 'jsonwebtoken';
 import { generateQRCodeForBooking } from '../utils/qrcode.js';
 import { sendConfirmationEmail } from '../utils/mailer.js';
 
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
-const isMockPaymentMode = !RAZORPAY_KEY_ID || RAZORPAY_KEY_ID;
-
-let razorpay = null;
-const getRazorpay = async () => {
-  if (!razorpay && !isMockPaymentMode) {
-    const module = await import('../config/razorpay.js');
-    razorpay = module.default;
-  }
-  return razorpay;
-};
+import razorpayInstance from '../config/razorpay.js';
+import Refund from '../models/Refund.js';
 
 const generateBookingId = () => {
   const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -93,6 +85,23 @@ export const createBooking = async (req, res) => {
       return res.status(404).json({ message: 'Show not found.' });
     }
 
+    // Clean up any existing unconfirmed/pending bookings for this user and this show
+    if (userId) {
+      const existingPending = await Booking.find({
+        show: showId,
+        user: userId,
+        paymentStatus: 'pending'
+      });
+      for (const ep of existingPending) {
+        await Seat.updateMany(
+          { bookingId: ep._id },
+          { $set: { status: 'available' }, $unset: { lockedAt: 1, lockExpiresAt: 1, lockedBy: 1, bookingId: 1 } }
+        );
+        await Booking.findByIdAndDelete(ep._id);
+        await Payment.deleteMany({ bookingId: ep._id });
+      }
+    }
+
     const alreadyBookedInShow = seats.filter(seat => show.bookedSeats.includes(seat));
     if (alreadyBookedInShow.length > 0) {
       return res.status(400).json({ 
@@ -149,56 +158,6 @@ export const createBooking = async (req, res) => {
       }
     }
 
-    if (isMockPaymentMode) {
-      const booking = new Booking({
-        bookingId,
-        show: showId,
-        user: userId || null,
-        customerDetails,
-        seats,
-        totalAmount,
-        paymentStatus: 'paid',
-        bookingStatus: 'confirmed'
-      });
-      await booking.save();
-
-      await Seat.updateMany(
-        {
-          showId,
-          seatNumber: { $in: seats },
-          $or: [
-            { status: 'available' },
-            { status: 'locked', lockExpiresAt: { $lt: new Date() } },
-            { status: 'locked', lockedBy: userId }
-          ]
-        },
-        {
-          $set: { status: 'booked', bookingId: booking._id },
-          $unset: { lockExpiresAt: 1, lockedAt: 1, lockedBy: 1 }
-        }
-      );
-
-      show.bookedSeats.push(...seats);
-      await show.save();
-
-      try {
-        const qrCodeUrl = await generateQRCodeForBooking(booking);
-        booking.qrCodeUrl = qrCodeUrl;
-        await booking.save();
-      } catch (qrErr) {
-        console.error('QR generation failed (non-critical):', qrErr.message);
-      }
-
-      try {
-        await sendConfirmationEmail(booking, show);
-      } catch (emailErr) {
-        console.error('Email sending failed (non-critical):', emailErr.message);
-      }
-
-      const populatedBooking = await Booking.findById(booking._id).populate('show');
-      return res.status(201).json(populatedBooking);
-    }
-
     const booking = new Booking({
       bookingId,
       show: showId,
@@ -221,50 +180,75 @@ export const createBooking = async (req, res) => {
       });
     }
 
-    let razorpayOrder = null;
-    try {
-      const rzp = await getRazorpay();
-      const options = {
-        amount: totalAmount * 100,
-        currency: 'INR',
-        receipt: bookingId
-      };
-      razorpayOrder = await rzp.orders.create(options);
-
-      const payment = new Payment({
-        bookingId: booking._id,
-        razorpayOrderId: razorpayOrder.id,
-        amount: totalAmount * 100,
-        status: 'created'
-      });
-      await payment.save();
-
-    } catch (paymentError) {
-      console.error('Razorpay Order Creation Failed:', paymentError);
-      
-      await Seat.updateMany(
-        { bookingId: booking._id },
-        { 
-          $set: { status: 'available', lockedBy: null, bookingId: null }, 
-          $unset: { lockExpiresAt: 1, lockedAt: 1 } 
-        }
-      );
-      await Booking.findByIdAndDelete(booking._id);
-
-      return res.status(500).json({ 
-        message: 'Failed to initialize payment gateway. Seats have been released.',
-        error: paymentError.message 
-      });
-    }
-
-    res.status(201).json({
-      booking,
-      razorpayOrder
-    });
+    const populatedBooking = await Booking.findById(booking._id).populate('show');
+    res.status(201).json(populatedBooking);
 
   } catch (error) {
     console.error('Booking post error:', error);
     res.status(500).json({ error: error.message, message: 'Server error processing booking.' });
+  }
+};
+
+export const createOrder = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const booking = await Booking.findOne({ bookingId }).populate('show');
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    const show = booking.show;
+    if (!show) {
+      return res.status(404).json({ message: 'Show not found.' });
+    }
+
+    // Compute payable amount server-side (show price * seats)
+    let calculatedAmount = 0;
+    for (const seatNumber of booking.seats) {
+      const [rowName] = seatNumber.split('-');
+      const rowInfo = show.layout.find(r => r.rowName === rowName);
+      if (!rowInfo) {
+        return res.status(400).json({ message: `Invalid seat row: ${seatNumber}` });
+      }
+      const categoryPrice = show.categories.find(c => c.name === rowInfo.category)?.price;
+      if (categoryPrice === undefined) {
+        return res.status(400).json({ message: `Price category not found for seat: ${seatNumber}` });
+      }
+      calculatedAmount += categoryPrice;
+    }
+
+    const amountInPaise = Math.round(calculatedAmount * 100);
+
+    const options = {
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt: booking.bookingId,
+      notes: {
+        bookingId: booking._id.toString(),
+        userId: booking.user ? booking.user.toString() : 'guest'
+      }
+    };
+
+    const razorpayOrder = await razorpayInstance.orders.create(options);
+
+    const payment = new Payment({
+      bookingId: booking._id,
+      razorpayOrderId: razorpayOrder.id,
+      amount: calculatedAmount, // Storing in Rupees
+      currency: 'INR',
+      status: 'created'
+    });
+    await payment.save();
+
+    res.status(201).json({
+      orderId: razorpayOrder.id,
+      amount: amountInPaise,
+      currency: 'INR',
+      keyId: process.env.RAZORPAY_KEY_ID
+    });
+  } catch (error) {
+    console.error('Razorpay Order Creation Failed:', error);
+    res.status(500).json({ error: error.message, message: 'Failed to initialize payment order.' });
   }
 };
 
@@ -292,42 +276,119 @@ export const getAllBookings = async (req, res) => {
 
 export const cancelBooking = async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.id);
+    const idParam = req.params.id || req.params.bookingId;
+    let booking = null;
+    if (mongoose.Types.ObjectId.isValid(idParam)) {
+      booking = await Booking.findById(idParam).populate('show');
+    }
+    if (!booking) {
+      booking = await Booking.findOne({ bookingId: idParam }).populate('show');
+    }
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found.' });
     }
+    return cancelBookingImplementation(booking, req, res);
+  } catch (error) {
+    res.status(500).json({ error: error.message, message: 'Server error cancelling booking.' });
+  }
+};
 
-    if (booking.bookingStatus === 'cancelled') {
+const cancelBookingImplementation = async (booking, req, res) => {
+  try {
+    if (booking.bookingStatus === 'cancelled' || booking.bookingStatus === 'cancelled_refunded') {
       return res.status(400).json({ message: 'Booking is already cancelled.' });
     }
 
-    booking.bookingStatus = 'cancelled';
-    booking.paymentStatus = 'refunded';
-    await booking.save();
+    // Validate cancellation window (at least 6 hours before show start time)
+    const show = booking.show;
+    if (show) {
+      const showDateTime = new Date(`${show.date}T${show.time}`);
+      const now = new Date();
+      const hoursDiff = (showDateTime - now) / (1000 * 60 * 60);
+      if (hoursDiff < 6) {
+        return res.status(400).json({ 
+          message: 'Cancellations are only allowed up to 6 hours before the show starts.' 
+        });
+      }
+    }
 
-    await Seat.updateMany(
-      { bookingId: booking._id },
-      { 
-        $set: { status: 'available', lockedBy: null, bookingId: null }, 
-        $unset: { lockExpiresAt: 1, lockedAt: 1 } 
+    // Verify ownership (only the user who booked or admin can cancel)
+    if (booking.user && booking.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'You are not authorized to cancel this booking.' });
+    }
+
+    // Look for an existing captured payment to refund
+    const payment = await Payment.findOne({ bookingId: booking._id, status: { $in: ['paid', 'captured'] } });
+    if (!payment) {
+      // If payment has not been successfully captured yet, cancel immediately
+      booking.bookingStatus = 'cancelled';
+      booking.paymentStatus = 'failed';
+      await booking.save();
+
+      // Release seats
+      await Seat.updateMany(
+        { bookingId: booking._id },
+        { 
+          $set: { status: 'available', lockedBy: null, bookingId: null }, 
+          $unset: { lockExpiresAt: 1, lockedAt: 1 } 
+        }
+      );
+
+      const showRecord = await Show.findById(booking.show);
+      if (showRecord) {
+        showRecord.bookedSeats = showRecord.bookedSeats.filter(
+          seat => !booking.seats.includes(seat)
+        );
+        await showRecord.save();
+      }
+
+      const populatedBooking = await Booking.findById(booking._id).populate('show');
+      return res.json({ 
+        message: 'Booking cancelled successfully (no captured payment found).', 
+        booking: populatedBooking 
+      });
+    }
+
+    // Trigger Razorpay Refunds API
+    const refundResponse = await razorpayInstance.payments.refund(
+      payment.razorpayPaymentId || payment.razorpayOrderId,
+      {
+        amount: Math.round(payment.amount * 100), // Convert Rupees to Paise
+        notes: {
+          bookingId: booking._id.toString(),
+          reason: 'User requested cancellation'
+        }
       }
     );
 
-    const show = await Show.findById(booking.show);
-    if (show) {
-      show.bookedSeats = show.bookedSeats.filter(
-        seat => !booking.seats.includes(seat)
-      );
-      await show.save();
-    }
+    // Store Refund record
+    const refund = new Refund({
+      paymentId: payment._id,
+      razorpayRefundId: refundResponse.id,
+      amount: payment.amount,
+      status: 'refund_initiated',
+      reason: 'User requested cancellation'
+    });
+    await refund.save();
+
+    // Update payment status
+    payment.status = 'refund_initiated';
+    payment.refundId = refundResponse.id;
+    await payment.save();
+
+    // Update booking status to cancellation_requested
+    booking.bookingStatus = 'cancellation_requested';
+    booking.paymentStatus = 'refund_initiated';
+    await booking.save();
 
     const populatedBooking = await Booking.findById(booking._id).populate('show');
     res.json({ 
-      message: 'Booking cancelled successfully.',
+      message: 'Cancellation and refund initiated. Awaiting confirmation.',
       booking: populatedBooking
     });
   } catch (error) {
-    res.status(500).json({ error: error.message, message: 'Server error cancelling booking.' });
+    console.error('Error in refund processing:', error);
+    res.status(500).json({ error: error.message, message: 'Server error processing refund during cancellation.' });
   }
 };
 

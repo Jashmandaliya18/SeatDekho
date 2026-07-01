@@ -40,12 +40,25 @@ const bookingSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'paid', 'refunded'],
-    default: 'paid'
+    enum: [
+      'pending',
+      'paid',
+      'refunded',
+      'pending_webhook_confirmation',
+      'failed',
+      'refund_initiated',
+      'refund_failed'
+    ],
+    default: 'pending'
   },
   bookingStatus: {
     type: String,
-    enum: ['confirmed', 'cancelled'],
+    enum: [
+      'confirmed',
+      'cancelled',
+      'cancellation_requested',
+      'cancelled_refunded'
+    ],
     default: 'confirmed'
   },
   qrCodeUrl: {

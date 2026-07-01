@@ -19,7 +19,6 @@ export default function CheckoutPage({ show, selectedSeats, totalAmount, user, o
     e.preventDefault();
     setError('');
 
-    
     if (!name.trim()) return setError('Please enter your full name.');
     if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) return setError('Please enter a valid email address.');
     if (!phone.trim() || phone.replace(/[^\d]/g, '').length < 10) {
@@ -40,56 +39,10 @@ export default function CheckoutPage({ show, selectedSeats, totalAmount, user, o
         userId: user?.id || null
       };
 
-      
-      const initData = await api.post('/bookings', payload);
-      
-      
-      
-      if (initData.razorpayOrder) {
-        
-        const { booking, razorpayOrder: order } = initData;
-        setPendingBooking(booking);
-        setRazorpayOrder(order);
-        setSubmitLoading(false);
-
-        const rzpKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
-        if (window.Razorpay && rzpKey) {
-          const options = {
-            key: rzpKey,
-            amount: order.amount,
-            currency: order.currency,
-            name: 'SeatDekho',
-            description: `Tickets for ${show.title}`,
-            order_id: order.id,
-            handler: function (response) {
-              handlePaymentSuccess(response);
-            },
-            prefill: {
-              name: name,
-              email: email,
-              contact: phone
-            },
-            theme: {
-              color: '#800020'
-            },
-            modal: {
-              ondismiss: function () {
-                handlePaymentClose();
-              }
-            }
-          };
-          const rzp = new window.Razorpay(options);
-          rzp.open();
-        } else {
-          
-          setIsPaymentOpen(true);
-        }
-      } else {
-        
-        setPendingBooking(initData);
-        setSubmitLoading(false);
-        setIsPaymentOpen(true);
-      }
+      const bookingData = await api.post('/bookings', payload);
+      setPendingBooking(bookingData);
+      setSubmitLoading(false);
+      setIsPaymentOpen(true);
     } catch (err) {
       console.error(err);
       setError(err.message || 'Failed to initialize checkout. Please try choosing other seats.');
@@ -97,61 +50,21 @@ export default function CheckoutPage({ show, selectedSeats, totalAmount, user, o
     }
   };
 
-  const handlePaymentSuccess = async (paymentDetails = null) => {
+  const handlePaymentSuccess = (confirmedBooking) => {
     setIsPaymentOpen(false);
-    setSubmitLoading(true);
-    setError('');
-
-    try {
-      
-      if (pendingBooking && pendingBooking.paymentStatus === 'paid') {
-        onBookingSuccess(pendingBooking);
-        return;
-      }
-
-      let verifyPayload;
-      if (paymentDetails) {
-        
-        verifyPayload = {
-          razorpay_order_id: paymentDetails.razorpay_order_id,
-          razorpay_payment_id: paymentDetails.razorpay_payment_id,
-          razorpay_signature: paymentDetails.razorpay_signature
-        };
-      } else {
-        
-        verifyPayload = {
-          razorpay_order_id: razorpayOrder?.id || 'mock_order_id',
-          razorpay_payment_id: `pay_mock_${Math.random().toString(36).substr(2, 9)}`,
-          razorpay_signature: 'mock_signature'
-        };
-      }
-
-      
-      const verifyResult = await api.post('/payments/verify', verifyPayload);
-      onBookingSuccess(verifyResult.booking);
-    } catch (err) {
-      console.error(err);
-      setError(err.message || 'Payment verification failed. Please try again or contact support.');
-    } finally {
-      setSubmitLoading(false);
-    }
+    onBookingSuccess(confirmedBooking);
   };
 
   const handlePaymentClose = async () => {
     setIsPaymentOpen(false);
-    if (pendingBooking && pendingBooking.paymentStatus !== 'paid') {
+    if (pendingBooking) {
       try {
-        
         await api.post(`/bookings/${pendingBooking._id}/unlock`);
       } catch (err) {
         console.error('Failed to release seats on cancel:', err);
       } finally {
         setPendingBooking(null);
-        setRazorpayOrder(null);
       }
-    } else {
-      setPendingBooking(null);
-      setRazorpayOrder(null);
     }
   };
 
@@ -298,8 +211,8 @@ export default function CheckoutPage({ show, selectedSeats, totalAmount, user, o
       <MockPaymentModal 
         isOpen={isPaymentOpen}
         onClose={handlePaymentClose}
-        totalAmount={totalAmount}
-        onSuccess={() => handlePaymentSuccess(null)}
+        booking={pendingBooking}
+        onSuccess={handlePaymentSuccess}
       />
     </div>
   );
