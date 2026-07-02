@@ -350,7 +350,7 @@ export default function AdminPage() {
 
   const handleCancelBooking = async (id, bookingId) => {
     try {
-      await api.put(`/bookings/${id}/cancel`);
+      await api.post(`/bookings/${id}/cancel`);
       setBookings(bookings.map(b => b._id === id ? { ...b, bookingStatus: 'cancelled' } : b));
       
       const showsData = await api.get('/shows');
@@ -358,7 +358,49 @@ export default function AdminPage() {
       
       toast.success(`Booking ${bookingId} cancelled.`);
     } catch (err) {
-      toast.error('Failed to cancel booking.');
+      toast.error(err.message || 'Failed to cancel booking.');
+    }
+  };
+
+  const handleApproveRefundClick = (id, bookingId) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Approve Refund & Cancel',
+      message: `Are you sure you want to approve the cancellation and process a refund of Booking ${bookingId}? This will trigger a real refund via Razorpay and immediately release the seats.`,
+      onConfirm: () => handleApproveRefund(id, bookingId)
+    });
+  };
+
+  const handleApproveRefund = async (id, bookingId) => {
+    try {
+      await api.post(`/bookings/${id}/approve-refund`);
+      setBookings(bookings.map(b => b._id === id ? { ...b, bookingStatus: 'cancelled_refunded', paymentStatus: 'refund_initiated' } : b));
+      
+      const showsData = await api.get('/shows');
+      setShows(showsData);
+      
+      toast.success(`Refund approved for Booking ${bookingId}.`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to approve refund.');
+    }
+  };
+
+  const handleRejectRefundClick = (id, bookingId) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Reject Cancellation Request',
+      message: `Reject the cancellation request for Booking ${bookingId}? The ticket will remain confirmed.`,
+      onConfirm: () => handleRejectRefund(id, bookingId)
+    });
+  };
+
+  const handleRejectRefund = async (id, bookingId) => {
+    try {
+      await api.post(`/bookings/${id}/reject-refund`);
+      setBookings(bookings.map(b => b._id === id ? { ...b, bookingStatus: 'confirmed' } : b));
+      toast.success(`Cancellation request for ${bookingId} rejected.`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to reject cancellation request.');
     }
   };
 
@@ -1350,19 +1392,40 @@ export default function AdminPage() {
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase ${
                                 b.bookingStatus === 'confirmed'
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-250'
+                                  : b.bookingStatus === 'cancellation_requested'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-250'
+                                  : b.bookingStatus === 'cancelled_refunded'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-250'
                                   : 'bg-red-50 text-red-650 border-red-200'
                               }`}>
-                                {b.bookingStatus}
+                                {b.bookingStatus.replace('_', ' ')}
                               </span>
                             </td>
                             <td className="py-4 px-4 text-center">
                               {b.bookingStatus === 'confirmed' ? (
                                 <button
                                   onClick={() => handleCancelBookingClick(b._id, b.bookingId)}
-                                  className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 hover:text-red-700 rounded-lg transition-colors font-bold border border-red-155"
+                                  className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 hover:text-red-700 rounded-lg transition-colors font-bold border border-red-155 text-xs"
                                 >
                                   Cancel
                                 </button>
+                              ) : b.bookingStatus === 'cancellation_requested' ? (
+                                <div className="flex flex-col gap-1.5 items-center justify-center">
+                                  <button
+                                    onClick={() => handleApproveRefundClick(b._id, b.bookingId)}
+                                    className="w-24 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-650 hover:text-emerald-700 rounded-lg transition-colors font-bold border border-emerald-155 text-[10px]"
+                                  >
+                                    Approve Refund
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectRefundClick(b._id, b.bookingId)}
+                                    className="w-24 px-2 py-1 bg-gray-50 hover:bg-gray-100 text-gray-650 hover:text-gray-700 rounded-lg transition-colors font-bold border border-gray-200 text-[10px]"
+                                  >
+                                    Reject Request
+                                  </button>
+                                </div>
+                              ) : b.bookingStatus === 'cancelled_refunded' ? (
+                                <span className="text-rose-600 font-extrabold text-[10px] uppercase">Refunded</span>
                               ) : (
                                 <span className="text-gray-400 italic">Released</span>
                               )}

@@ -7,42 +7,50 @@ import Refund from '../models/Refund.js';
 import razorpayInstance from '../config/razorpay.js';
 import { generateQRCodeForBooking } from '../utils/qrcode.js';
 import { sendConfirmationEmail } from '../utils/mailer.js';
+import { runInTransaction } from '../utils/transaction.js';
 
 const finalizeBooking = async (booking) => {
-  await Seat.updateMany(
-    { bookingId: booking._id },
-    { $set: { status: 'booked' }, $unset: { lockExpiresAt: 1, lockedAt: 1 } }
-  );
+  let showRecord = null;
 
-  const show = await Show.findById(booking.show);
-  if (show) {
-    const newSeats = booking.seats.filter(s => !show.bookedSeats.includes(s));
-    if (newSeats.length > 0) {
-      show.bookedSeats.push(...newSeats);
-      await show.save();
+  await runInTransaction(async (session) => {
+    await Seat.updateMany(
+      { bookingId: booking._id },
+      { $set: { status: 'booked' }, $unset: { lockExpiresAt: 1, lockedAt: 1 } },
+      { session }
+    );
+
+    const show = await Show.findById(booking.show).session(session);
+    showRecord = show;
+    if (show) {
+      const newSeats = booking.seats.filter(s => !show.bookedSeats.includes(s));
+      if (newSeats.length > 0) {
+        show.bookedSeats.push(...newSeats);
+        await show.save({ session });
+      }
     }
-  }
 
-  booking.paymentStatus = 'paid';
-  booking.bookingStatus = 'confirmed';
+    booking.paymentStatus = 'paid';
+    booking.bookingStatus = 'confirmed';
+
+    try {
+      const qrCodeUrl = await generateQRCodeForBooking(booking);
+      booking.qrCodeUrl = qrCodeUrl;
+    } catch (qrErr) {
+      console.error('QR generation failed (non-critical):', qrErr.message);
+    }
+
+    await booking.save({ session });
+  });
 
   try {
-    const qrCodeUrl = await generateQRCodeForBooking(booking);
-    booking.qrCodeUrl = qrCodeUrl;
-  } catch (qrErr) {
-    console.error('QR generation failed (non-critical):', qrErr.message);
-  }
-
-  await booking.save();
-
-  try {
-    if (show) await sendConfirmationEmail(booking, show);
+    if (showRecord) await sendConfirmationEmail(booking, showRecord);
   } catch (emailErr) {
     console.error('Email sending failed (non-critical):', emailErr.message);
   }
 
   return await Booking.findById(booking._id).populate('show');
 };
+
 
 export const createQRCode = async (req, res) => {
   try {

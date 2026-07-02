@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle2, Download, Calendar, Clock, MapPin, QrCode, Home, Award } from 'lucide-react';
+import { CheckCircle2, Download, Calendar, Clock, MapPin, QrCode, Home, Award, AlertCircle, XCircle } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function TicketPage({ booking: initialBooking, onGoHome }) {
@@ -11,6 +11,7 @@ export default function TicketPage({ booking: initialBooking, onGoHome }) {
   const stateBooking = location.state?.booking;
   const [booking, setBooking] = useState(initialBooking || stateBooking || null);
   const [loading, setLoading] = useState(!booking);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!booking) {
@@ -98,18 +99,76 @@ export default function TicketPage({ booking: initialBooking, onGoHome }) {
     }
   };
 
+  const isCancellationAllowed = () => {
+    if (!show) return false;
+    const showDateTime = new Date(`${show.date}T${show.time}`);
+    const now = new Date();
+    const hoursDiff = (showDateTime - now) / (1000 * 60 * 60);
+    return hoursDiff >= 6;
+  };
+
+  const handleRequestCancellation = async () => {
+    if (!window.confirm("Are you sure you want to cancel this ticket booking? The admin will review and process your refund.")) {
+      return;
+    }
+    setCancelling(true);
+    try {
+      const result = await api.post(`/bookings/${booking._id}/cancel`);
+      setBooking(result.booking || result);
+      if (window.showToast) {
+        window.showToast('Cancellation request submitted successfully!', 'success');
+      } else {
+        alert('Cancellation request submitted successfully!');
+      }
+    } catch (err) {
+      console.error(err);
+      const errMsg = err.message || 'Failed to submit cancellation request.';
+      if (window.showToast) {
+        window.showToast(errMsg, 'error');
+      } else {
+        alert(errMsg);
+      }
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-8 pb-20 animate-fade-in print:bg-white print:p-0">
       
       
       <div className="text-center space-y-3 print:hidden">
-        <div className="inline-flex p-3 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 shadow-xs">
-          <CheckCircle2 className="w-10 h-10" />
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-maroon-900 tracking-tight">Booking Confirmed!</h1>
-        <p className="text-xs text-gray-500 font-medium max-w-md mx-auto">
-          Congratulations! Your seats have been successfully reserved. We have sent a copy of this ticket to <span className="font-bold text-gray-700">{booking.customerDetails.email}</span>.
-        </p>
+        {booking.bookingStatus === 'cancellation_requested' ? (
+          <>
+            <div className="inline-flex p-3 bg-amber-50 text-amber-600 rounded-full border border-amber-100 shadow-xs">
+              <AlertCircle className="w-10 h-10" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-amber-900 tracking-tight">Cancellation Requested</h1>
+            <p className="text-xs text-gray-500 font-medium max-w-md mx-auto">
+              Your cancellation request is pending administrator review. Once approved, your refund will be processed back to your original payment method.
+            </p>
+          </>
+        ) : booking.bookingStatus === 'cancelled' || booking.bookingStatus === 'cancelled_refunded' ? (
+          <>
+            <div className="inline-flex p-3 bg-red-50 text-red-650 rounded-full border border-red-100 shadow-xs">
+              <XCircle className="w-10 h-10" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-red-900 tracking-tight">Booking Cancelled</h1>
+            <p className="text-xs text-gray-500 font-medium max-w-md mx-auto">
+              This ticket has been cancelled. If any payment was captured, the refund has been initiated or completed.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="inline-flex p-3 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 shadow-xs">
+              <CheckCircle2 className="w-10 h-10" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-maroon-900 tracking-tight">Booking Confirmed!</h1>
+            <p className="text-xs text-gray-500 font-medium max-w-md mx-auto">
+              Congratulations! Your seats have been successfully reserved. We have sent a copy of this ticket to <span className="font-bold text-gray-700">{booking.customerDetails.email}</span>.
+            </p>
+          </>
+        )}
       </div>
 
       
@@ -202,7 +261,13 @@ export default function TicketPage({ booking: initialBooking, onGoHome }) {
           <div className="mt-4 md:mt-0 w-full pt-4 border-t border-gray-200/60">
             <span className="block text-[8px] text-gray-400 font-bold uppercase tracking-wider">Total Amount Paid</span>
             <span className="text-lg font-black text-maroon-900">₹{booking.totalAmount.toLocaleString('en-IN')}</span>
-            <span className="block text-[9px] text-emerald-600 font-bold mt-0.5">💰 Payment Successful</span>
+            {booking.bookingStatus === 'cancellation_requested' ? (
+              <span className="block text-[9px] text-amber-600 font-bold mt-0.5">⏳ Refund Pending Approval</span>
+            ) : booking.bookingStatus === 'cancelled' || booking.bookingStatus === 'cancelled_refunded' ? (
+              <span className="block text-[9px] text-red-600 font-bold mt-0.5">💸 Refunded / Cancelled</span>
+            ) : (
+              <span className="block text-[9px] text-emerald-600 font-bold mt-0.5">💰 Payment Successful</span>
+            )}
           </div>
         </div>
       </div>
@@ -216,6 +281,27 @@ export default function TicketPage({ booking: initialBooking, onGoHome }) {
           <Home className="w-4 h-4" />
           <span>{fromProfile ? 'Back to Profile' : 'Back to Home'}</span>
         </button>
+
+        {booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'paid' && (
+          <button 
+            onClick={handleRequestCancellation}
+            disabled={cancelling || !isCancellationAllowed()}
+            className={`w-full sm:w-auto inline-flex items-center justify-center space-x-2 text-sm font-bold px-6 py-3 rounded-xl shadow-xs border transition-colors ${
+              isCancellationAllowed()
+                ? 'bg-red-50 hover:bg-red-100 text-red-650 border-red-200'
+                : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+            }`}
+            title={!isCancellationAllowed() ? 'Cancellations are only allowed up to 6 hours before show starts' : ''}
+          >
+            <span>{cancelling ? 'Processing...' : 'Request Cancellation'}</span>
+          </button>
+        )}
+
+        {booking.bookingStatus === 'cancellation_requested' && (
+          <span className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 text-sm font-bold bg-amber-50 text-amber-700 border border-amber-200 px-6 py-3 rounded-xl cursor-default">
+            ⏳ Cancellation Pending Review
+          </span>
+        )}
 
         <button 
           onClick={handleDownload}

@@ -9,6 +9,7 @@ import { sendConfirmationEmail } from '../utils/mailer.js';
 
 import razorpayInstance from '../config/razorpay.js';
 import Refund from '../models/Refund.js';
+import { runInTransaction } from '../utils/transaction.js';
 
 const generateBookingId = () => {
   const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -19,7 +20,7 @@ const generateBookingId = () => {
   return result;
 };
 
-const lockSeats = async (showId, seatsRequested, bookingId, lockExpiry, userId) => {
+const lockSeats = async (showId, seatsRequested, bookingId, lockExpiry, userId, session) => {
   const now = new Date();
   
   const result = await Seat.updateMany(
@@ -40,7 +41,8 @@ const lockSeats = async (showId, seatsRequested, bookingId, lockExpiry, userId) 
         lockedAt: now,
         lockedBy: userId
       }
-    }
+    },
+    { session }
   );
 
   if (result.modifiedCount < seatsRequested.length) {
@@ -60,7 +62,8 @@ const lockSeats = async (showId, seatsRequested, bookingId, lockExpiry, userId) 
           lockExpiresAt: 1,
           lockedAt: 1
         }
-      }
+      },
+      { session }
     );
     return false;
   }
@@ -83,48 +86,6 @@ export const createBooking = async (req, res) => {
     const show = await Show.findById(showId);
     if (!show) {
       return res.status(404).json({ message: 'Show not found.' });
-    }
-
-    // Clean up any existing unconfirmed/pending bookings for this user and this show
-    if (userId) {
-      const existingPending = await Booking.find({
-        show: showId,
-        user: userId,
-        paymentStatus: 'pending'
-      });
-      for (const ep of existingPending) {
-        await Seat.updateMany(
-          { bookingId: ep._id },
-          { $set: { status: 'available' }, $unset: { lockedAt: 1, lockExpiresAt: 1, lockedBy: 1, bookingId: 1 } }
-        );
-        await Booking.findByIdAndDelete(ep._id);
-        await Payment.deleteMany({ bookingId: ep._id });
-      }
-    }
-
-    const alreadyBookedInShow = seats.filter(seat => show.bookedSeats.includes(seat));
-    if (alreadyBookedInShow.length > 0) {
-      return res.status(400).json({ 
-        message: `Seats already booked: ${alreadyBookedInShow.join(', ')}`,
-        alreadyBooked: alreadyBookedInShow
-      });
-    }
-
-    const seatsStatus = await Seat.find({
-      showId,
-      seatNumber: { $in: seats }
-    });
-
-    const now = new Date();
-    const alreadyReserved = seatsStatus
-      .filter(s => s.status === 'booked' || (s.status === 'locked' && s.lockExpiresAt > now && s.lockedBy?.toString() !== userId.toString()))
-      .map(s => s.seatNumber);
-
-    if (alreadyReserved.length > 0) {
-      return res.status(400).json({ 
-        message: `Seats already locked or booked: ${alreadyReserved.join(', ')}`,
-        alreadyBooked: alreadyReserved 
-      });
     }
 
     let calculatedAmount = 0;
@@ -158,34 +119,76 @@ export const createBooking = async (req, res) => {
       }
     }
 
-    const booking = new Booking({
-      bookingId,
-      show: showId,
-      user: userId || null,
-      customerDetails,
-      seats,
-      totalAmount,
-      paymentStatus: 'pending',
-      bookingStatus: 'confirmed'
-    });
-    await booking.save();
+    let finalBooking = null;
 
-    const lockExpiry = new Date(Date.now() + 5 * 60 * 1000);
-    const lockSuccess = await lockSeats(showId, seats, booking._id, lockExpiry, userId);
+    await runInTransaction(async (session) => {
+      // Clean up any existing unconfirmed/pending bookings for this user and this show
+      if (userId) {
+        const existingPending = await Booking.find({
+          show: showId,
+          user: userId,
+          paymentStatus: 'pending'
+        }).session(session);
 
-    if (!lockSuccess) {
-      await Booking.findByIdAndDelete(booking._id);
-      return res.status(400).json({ 
-        message: 'Could not lock your selected seats. They were booked by another customer.' 
+        for (const ep of existingPending) {
+          await Seat.updateMany(
+            { bookingId: ep._id },
+            { $set: { status: 'available' }, $unset: { lockedAt: 1, lockExpiresAt: 1, lockedBy: 1, bookingId: 1 } },
+            { session }
+          );
+          await Booking.findByIdAndDelete(ep._id, { session });
+          await Payment.deleteMany({ bookingId: ep._id }, { session });
+        }
+      }
+
+      const freshShow = await Show.findById(showId).session(session);
+      const alreadyBookedInShow = seats.filter(seat => freshShow.bookedSeats.includes(seat));
+      if (alreadyBookedInShow.length > 0) {
+        throw new Error(`Seats already booked: ${alreadyBookedInShow.join(', ')}`);
+      }
+
+      const seatsStatus = await Seat.find({
+        showId,
+        seatNumber: { $in: seats }
+      }).session(session);
+
+      const now = new Date();
+      const alreadyReserved = seatsStatus
+        .filter(s => s.status === 'booked' || (s.status === 'locked' && s.lockExpiresAt > now && s.lockedBy?.toString() !== userId.toString()))
+        .map(s => s.seatNumber);
+
+      if (alreadyReserved.length > 0) {
+        throw new Error(`Seats already locked or booked: ${alreadyReserved.join(', ')}`);
+      }
+
+      const booking = new Booking({
+        bookingId,
+        show: showId,
+        user: userId || null,
+        customerDetails,
+        seats,
+        totalAmount,
+        paymentStatus: 'pending',
+        bookingStatus: 'confirmed'
       });
-    }
+      await booking.save({ session });
 
-    const populatedBooking = await Booking.findById(booking._id).populate('show');
+      const lockExpiry = new Date(Date.now() + 5 * 60 * 1000);
+      const lockSuccess = await lockSeats(showId, seats, booking._id, lockExpiry, userId, session);
+
+      if (!lockSuccess) {
+        throw new Error('Could not lock your selected seats. They were booked by another customer.');
+      }
+
+      finalBooking = booking;
+    });
+
+    const populatedBooking = await Booking.findById(finalBooking._id).populate('show');
     res.status(201).json(populatedBooking);
 
   } catch (error) {
     console.error('Booking post error:', error);
-    res.status(500).json({ error: error.message, message: 'Server error processing booking.' });
+    res.status(400).json({ message: error.message || 'Server error processing booking.' });
   }
 };
 
@@ -321,26 +324,29 @@ const cancelBookingImplementation = async (booking, req, res) => {
     const payment = await Payment.findOne({ bookingId: booking._id, status: { $in: ['paid', 'captured'] } });
     if (!payment) {
       // If payment has not been successfully captured yet, cancel immediately
-      booking.bookingStatus = 'cancelled';
-      booking.paymentStatus = 'failed';
-      await booking.save();
+      await runInTransaction(async (session) => {
+        booking.bookingStatus = 'cancelled';
+        booking.paymentStatus = 'failed';
+        await booking.save({ session });
 
-      // Release seats
-      await Seat.updateMany(
-        { bookingId: booking._id },
-        { 
-          $set: { status: 'available', lockedBy: null, bookingId: null }, 
-          $unset: { lockExpiresAt: 1, lockedAt: 1 } 
-        }
-      );
-
-      const showRecord = await Show.findById(booking.show);
-      if (showRecord) {
-        showRecord.bookedSeats = showRecord.bookedSeats.filter(
-          seat => !booking.seats.includes(seat)
+        // Release seats
+        await Seat.updateMany(
+          { bookingId: booking._id },
+          { 
+            $set: { status: 'available', lockedBy: null, bookingId: null }, 
+            $unset: { lockExpiresAt: 1, lockedAt: 1 } 
+          },
+          { session }
         );
-        await showRecord.save();
-      }
+
+        const showRecord = await Show.findById(booking.show).session(session);
+        if (showRecord) {
+          showRecord.bookedSeats = showRecord.bookedSeats.filter(
+            seat => !booking.seats.includes(seat)
+          );
+          await showRecord.save({ session });
+        }
+      });
 
       const populatedBooking = await Booking.findById(booking._id).populate('show');
       return res.json({ 
@@ -349,46 +355,202 @@ const cancelBookingImplementation = async (booking, req, res) => {
       });
     }
 
-    // Trigger Razorpay Refunds API
+    // If request is made by a non-admin, just record the request (do NOT trigger refund yet) (Step 4)
+    if (req.user.role !== 'admin') {
+      booking.bookingStatus = 'cancellation_requested';
+      await booking.save();
+
+      const populatedBooking = await Booking.findById(booking._id).populate('show');
+      return res.json({ 
+        message: 'Cancellation and refund request submitted successfully. Awaiting admin approval.',
+        booking: populatedBooking
+      });
+    }
+
+    // If request is made by Admin, immediately process refund (Step 5)
     const refundResponse = await razorpayInstance.payments.refund(
       payment.razorpayPaymentId || payment.razorpayOrderId,
       {
         amount: Math.round(payment.amount * 100), // Convert Rupees to Paise
         notes: {
           bookingId: booking._id.toString(),
-          reason: 'User requested cancellation'
+          reason: 'Admin cancelled booking immediately'
         }
       }
     );
 
-    // Store Refund record
-    const refund = new Refund({
-      paymentId: payment._id,
-      razorpayRefundId: refundResponse.id,
-      amount: payment.amount,
-      status: 'refund_initiated',
-      reason: 'User requested cancellation'
+    // Update statuses, release seats, and remove from show bookedSeats inside transaction (ACID)
+    await runInTransaction(async (session) => {
+      // Store Refund record
+      const refund = new Refund({
+        paymentId: payment._id,
+        razorpayRefundId: refundResponse.id,
+        amount: payment.amount,
+        status: 'refund_initiated',
+        reason: 'Admin cancelled booking immediately'
+      });
+      await refund.save({ session });
+
+      // Update payment status
+      payment.status = 'refund_initiated';
+      payment.refundId = refundResponse.id;
+      await payment.save({ session });
+
+      // Update booking status
+      booking.bookingStatus = 'cancelled_refunded';
+      booking.paymentStatus = 'refund_initiated';
+      await booking.save({ session });
+
+      // Release seats
+      await Seat.updateMany(
+        { bookingId: booking._id },
+        { 
+          $set: { status: 'available', lockedBy: null, bookingId: null }, 
+          $unset: { lockExpiresAt: 1, lockedAt: 1 } 
+        },
+        { session }
+      );
+
+      // Update Show layout
+      const showRecord = await Show.findById(booking.show).session(session);
+      if (showRecord) {
+        showRecord.bookedSeats = showRecord.bookedSeats.filter(
+          seat => !booking.seats.includes(seat)
+        );
+        await showRecord.save({ session });
+      }
     });
-    await refund.save();
-
-    // Update payment status
-    payment.status = 'refund_initiated';
-    payment.refundId = refundResponse.id;
-    await payment.save();
-
-    // Update booking status to cancellation_requested
-    booking.bookingStatus = 'cancellation_requested';
-    booking.paymentStatus = 'refund_initiated';
-    await booking.save();
 
     const populatedBooking = await Booking.findById(booking._id).populate('show');
     res.json({ 
-      message: 'Cancellation and refund initiated. Awaiting confirmation.',
+      message: 'Booking cancelled and refund processed immediately by Admin.',
       booking: populatedBooking
     });
   } catch (error) {
     console.error('Error in refund processing:', error);
     res.status(500).json({ error: error.message, message: 'Server error processing refund during cancellation.' });
+  }
+};
+
+export const approveRefund = async (req, res) => {
+  try {
+    const idParam = req.params.id || req.params.bookingId;
+    let booking = null;
+    if (mongoose.Types.ObjectId.isValid(idParam)) {
+      booking = await Booking.findById(idParam).populate('show');
+    }
+    if (!booking) {
+      booking = await Booking.findOne({ bookingId: idParam }).populate('show');
+    }
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    if (booking.bookingStatus !== 'cancellation_requested') {
+      return res.status(400).json({ message: 'Booking does not have a pending cancellation request.' });
+    }
+
+    const payment = await Payment.findOne({ bookingId: booking._id, status: { $in: ['paid', 'captured'] } });
+    if (!payment) {
+      return res.status(404).json({ message: 'No paid payment record found for this booking.' });
+    }
+
+    // Trigger Razorpay Refunds API
+    const refundResponse = await razorpayInstance.payments.refund(
+      payment.razorpayPaymentId || payment.razorpayOrderId,
+      {
+        amount: Math.round(payment.amount * 100),
+        notes: {
+          bookingId: booking._id.toString(),
+          reason: 'Admin approved cancellation request'
+        }
+      }
+    );
+
+    // Update DB inside transaction (ACID)
+    await runInTransaction(async (session) => {
+      // Store Refund record
+      const refund = new Refund({
+        paymentId: payment._id,
+        razorpayRefundId: refundResponse.id,
+        amount: payment.amount,
+        status: 'refund_initiated',
+        reason: 'Admin approved cancellation request'
+      });
+      await refund.save({ session });
+
+      // Update payment status
+      payment.status = 'refund_initiated';
+      payment.refundId = refundResponse.id;
+      await payment.save({ session });
+
+      // Update booking status
+      booking.bookingStatus = 'cancelled_refunded';
+      booking.paymentStatus = 'refund_initiated';
+      await booking.save({ session });
+
+      // Release seats
+      await Seat.updateMany(
+        { bookingId: booking._id },
+        { 
+          $set: { status: 'available', lockedBy: null, bookingId: null }, 
+          $unset: { lockExpiresAt: 1, lockedAt: 1 } 
+        },
+        { session }
+      );
+
+      // Update Show layout
+      const showRecord = await Show.findById(booking.show).session(session);
+      if (showRecord) {
+        showRecord.bookedSeats = showRecord.bookedSeats.filter(
+          seat => !booking.seats.includes(seat)
+        );
+        await showRecord.save({ session });
+      }
+    });
+
+    const populatedBooking = await Booking.findById(booking._id).populate('show');
+    res.json({
+      message: 'Refund approved and initiated successfully.',
+      booking: populatedBooking
+    });
+
+  } catch (error) {
+    console.error('Approve refund error:', error);
+    res.status(500).json({ error: error.message, message: 'Server error approving refund.' });
+  }
+};
+
+export const rejectRefund = async (req, res) => {
+  try {
+    const idParam = req.params.id || req.params.bookingId;
+    let booking = null;
+    if (mongoose.Types.ObjectId.isValid(idParam)) {
+      booking = await Booking.findById(idParam).populate('show');
+    }
+    if (!booking) {
+      booking = await Booking.findOne({ bookingId: idParam }).populate('show');
+    }
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    if (booking.bookingStatus !== 'cancellation_requested') {
+      return res.status(400).json({ message: 'Booking does not have a pending cancellation request.' });
+    }
+
+    booking.bookingStatus = 'confirmed';
+    await booking.save();
+
+    const populatedBooking = await Booking.findById(booking._id).populate('show');
+    res.json({
+      message: 'Cancellation request rejected. Ticket remains confirmed.',
+      booking: populatedBooking
+    });
+
+  } catch (error) {
+    console.error('Reject refund error:', error);
+    res.status(500).json({ error: error.message, message: 'Server error rejecting cancellation request.' });
   }
 };
 

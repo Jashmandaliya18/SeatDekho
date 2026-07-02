@@ -156,33 +156,13 @@ export default function MockPaymentModal({ isOpen, onClose, booking, onSuccess }
         }
       };
 
-      // Only prefill method if it's card, or if it's upi and a VPA is entered.
-      // This prevents the SDK from trying to headlessly process a UPI payment without a VPA.
+      // Prefill payment methods
       if (paymentMethod === 'card') {
         options.prefill.method = 'card';
       } else if (paymentMethod === 'upi') {
+        options.prefill.method = 'upi';
         if (upiId) {
-          options.prefill.method = 'upi';
           options.prefill.vpa = upiId;
-        } else {
-          // If UPI tab is selected but no specific VPA is typed,
-          // direct standard checkout to open the UPI screen showing the QR code natively.
-          options.config = {
-            display: {
-              blocks: {
-                banks: {
-                  name: 'UPI / QR Code',
-                  instruments: [
-                    {
-                      method: 'upi',
-                      apps: ['qr']
-                    }
-                  ]
-                }
-              },
-              sequence: ['block.banks']
-            }
-          };
         }
       }
 
