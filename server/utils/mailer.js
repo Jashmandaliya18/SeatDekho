@@ -3,18 +3,12 @@ import path from 'path';
 
 dotenv.config({ path: path.resolve(import.meta.dirname, '../../.env') });
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-
-// Smart check: Resend free tier only allows sending from 'onboarding@resend.dev'
-// unless you have verified your own custom domain. If SENDER_EMAIL is Gmail or not set, use onboarding.
-const rawSender = process.env.SENDER_EMAIL || '';
-const SENDER_EMAIL = (rawSender.endsWith('@gmail.com') || rawSender === '') 
-  ? 'onboarding@resend.dev' 
-  : rawSender;
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const SENDER_EMAIL = process.env.SENDER_EMAIL || 'seatdekho.info@gmail.com';
 
 export const sendConfirmationEmail = async (booking, show) => {
-  if (!RESEND_API_KEY) {
-    console.warn('[RESEND WARNING] RESEND_API_KEY is not defined. Email will not be sent.');
+  if (!BREVO_API_KEY) {
+    console.warn('[BREVO WARNING] BREVO_API_KEY is not defined. Email will not be sent.');
     console.log(`[BYPASS LOG] Booking Confirmation for ${booking.customerDetails.email} (Booking ID: ${booking.bookingId})`);
     return null;
   }
@@ -27,22 +21,28 @@ export const sendConfirmationEmail = async (booking, show) => {
       year: 'numeric'
     });
 
-    const attachments = [];
+    const attachment = [];
     if (booking.qrCodeUrl && booking.qrCodeUrl.startsWith('data:image/png;base64,')) {
       const base64Data = booking.qrCodeUrl.split(';base64,').pop();
-      attachments.push({
+      attachment.push({
         content: base64Data,
-        filename: `ticket-${booking.bookingId}.png`,
-        id: 'qrcode',
-        content_type: 'image/png'
+        name: 'qrcode'
       });
     }
 
     const mailOptions = {
-      from: `SeatDekho <${SENDER_EMAIL}>`,
-      to: [booking.customerDetails.email],
+      sender: {
+        name: 'SeatDekho',
+        email: SENDER_EMAIL
+      },
+      to: [
+        {
+          email: booking.customerDetails.email,
+          name: booking.customerDetails.name
+        }
+      ],
       subject: `Booking Confirmed! Your Ticket for ${show.title} - ${booking.bookingId}`,
-      html: `
+      htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #fcfcfc;">
           <div style="text-align: center; border-bottom: 2px solid #800020; padding-bottom: 15px; margin-bottom: 20px;">
             <h1 style="color: #800020; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 0.05em;">SeatDekho</h1>
@@ -96,15 +96,19 @@ export const sendConfirmationEmail = async (booking, show) => {
             <p style="margin: 0;">&copy; ${new Date().getFullYear()} SeatDekho Platform. All rights reserved.</p>
           </div>
         </div>
-      `,
-      attachments
+      `
     };
 
-    const response = await fetch('https://api.resend.com/emails', {
+    if (attachment.length > 0) {
+      mailOptions.attachment = attachment;
+    }
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${RESEND_API_KEY}`
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY,
+        'content-type': 'application/json'
       },
       body: JSON.stringify(mailOptions)
     });
@@ -114,27 +118,35 @@ export const sendConfirmationEmail = async (booking, show) => {
       throw new Error(data.message || `HTTP error ${response.status}`);
     }
 
-    console.log(`Confirmation email sent successfully via Resend. Message ID: ${data.id}`);
+    console.log(`Confirmation email sent successfully via Brevo. Message ID: ${data.messageId}`);
     return data;
   } catch (error) {
-    console.error('Failed to send confirmation email via Resend:', error.message);
+    console.error('Failed to send confirmation email via Brevo:', error.message);
     return null;
   }
 };
 
 export const sendOTPEmail = async (email, otp) => {
-  if (!RESEND_API_KEY) {
-    console.warn('[RESEND WARNING] RESEND_API_KEY is not defined. Email will not be sent.');
+  if (!BREVO_API_KEY) {
+    console.warn('[BREVO WARNING] BREVO_API_KEY is not defined. Email will not be sent.');
     console.log(`[CRITICAL BYPASS] OTP for ${email} is ${otp}`);
     return null;
   }
 
   try {
     const mailOptions = {
-      from: `SeatDekho <${SENDER_EMAIL}>`,
-      to: [email],
+      sender: {
+        name: 'SeatDekho',
+        email: SENDER_EMAIL
+      },
+      to: [
+        {
+          email: email,
+          name: email.split('@')[0]
+        }
+      ],
       subject: `SeatDekho - OTP Verification Code: ${otp}`,
-      html: `
+      htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #fcfcfc;">
           <div style="text-align: center; border-bottom: 2px solid #800020; padding-bottom: 15px; margin-bottom: 20px;">
             <h1 style="color: #800020; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 0.05em;">SeatDekho</h1>
@@ -159,11 +171,12 @@ export const sendOTPEmail = async (email, otp) => {
       `
     };
 
-    const response = await fetch('https://api.resend.com/emails', {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${RESEND_API_KEY}`
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY,
+        'content-type': 'application/json'
       },
       body: JSON.stringify(mailOptions)
     });
@@ -173,10 +186,10 @@ export const sendOTPEmail = async (email, otp) => {
       throw new Error(data.message || `HTTP error ${response.status}`);
     }
 
-    console.log(`OTP email sent successfully via Resend. Message ID: ${data.id}`);
+    console.log(`OTP email sent successfully via Brevo. Message ID: ${data.messageId}`);
     return data;
   } catch (error) {
-    console.error('Failed to send OTP email via Resend:', error.message);
+    console.error('Failed to send OTP email via Brevo:', error.message);
     console.log(`[CRITICAL BYPASS] OTP for ${email} is ${otp}`);
     return null;
   }
