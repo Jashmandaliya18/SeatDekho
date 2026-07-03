@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
 import connectDB from './config/db.js';
 import authRoutes from './routes/auth.js';
@@ -49,8 +50,21 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
 
 
-app.get('/', (req, res) => {
-  res.json({ message: 'Rangmanch Drama Booking API is running successfully.' });
+// Serve static client assets in production
+const distPath = path.resolve(import.meta.dirname, '../client/dist');
+app.use(express.static(distPath));
+
+app.get('*', (req, res) => {
+  if (req.originalUrl.startsWith('/api')) {
+    return res.status(404).json({ message: 'API route not found' });
+  }
+
+  const indexPath = path.resolve(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.json({ message: 'Rangmanch Drama Booking API is running successfully. (Frontend assets not built yet)' });
+  }
 });
 
 
