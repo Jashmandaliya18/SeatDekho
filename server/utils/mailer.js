@@ -1,10 +1,24 @@
-import transporter from '../config/nodemailer.js';
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
 
-const SENDER_EMAIL = process.env.SENDER_EMAIL ;
+dotenv.config({ path: path.resolve(import.meta.dirname, '../../.env') });
+
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+
+// Smart check: Resend free tier only allows sending from 'onboarding@resend.dev'
+// unless you have verified your own custom domain. If SENDER_EMAIL is Gmail or not set, use onboarding.
+const rawSender = process.env.SENDER_EMAIL || '';
+const SENDER_EMAIL = (rawSender.endsWith('@gmail.com') || rawSender === '') 
+  ? 'onboarding@resend.dev' 
+  : rawSender;
 
 export const sendConfirmationEmail = async (booking, show) => {
+  if (!RESEND_API_KEY) {
+    console.warn('[RESEND WARNING] RESEND_API_KEY is not defined. Email will not be sent.');
+    console.log(`[BYPASS LOG] Booking Confirmation for ${booking.customerDetails.email} (Booking ID: ${booking.bookingId})`);
+    return null;
+  }
+
   try {
     const formattedDate = new Date(show.date).toLocaleDateString('en-IN', {
       weekday: 'short',
@@ -13,9 +27,20 @@ export const sendConfirmationEmail = async (booking, show) => {
       year: 'numeric'
     });
 
+    const attachments = [];
+    if (booking.qrCodeUrl && booking.qrCodeUrl.startsWith('data:image/png;base64,')) {
+      const base64Data = booking.qrCodeUrl.split(';base64,').pop();
+      attachments.push({
+        content: base64Data,
+        filename: `ticket-${booking.bookingId}.png`,
+        id: 'qrcode',
+        content_type: 'image/png'
+      });
+    }
+
     const mailOptions = {
-      from: `"SeatDekho Tickets" <${SENDER_EMAIL}>`,
-      to: booking.customerDetails.email,
+      from: `SeatDekho <${SENDER_EMAIL}>`,
+      to: [booking.customerDetails.email],
       subject: `Booking Confirmed! Your Ticket for ${show.title} - ${booking.bookingId}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #fcfcfc;">
@@ -59,8 +84,10 @@ export const sendConfirmationEmail = async (booking, show) => {
           </div>
 
           <div style="text-align: center; margin-top: 25px; padding: 15px; background-color: #fafafa; border-radius: 8px;">
-            <p style="margin: 0 0 10px 0; font-size: 11px; color: #6b7280; font-weight: bold; uppercase;">SCAN THIS CODE AT THE ENTRANCE GATE</p>
-            <div style="display: inline-block; width: 180px; height: 180px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff; background-image: url('cid:qrcode'); background-repeat: no-repeat; background-position: center; background-size: 170px 170px; pointer-events: none; -webkit-user-drag: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;" title="Entry QR Ticket"></div>
+            <p style="margin: 0 0 10px 0; font-size: 11px; color: #6b7280; font-weight: bold; text-transform: uppercase;">SCAN THIS CODE AT THE ENTRANCE GATE</p>
+            <div style="display: inline-block; width: 180px; height: 180px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff; text-align: center;">
+              <img src="cid:qrcode" alt="Entry QR Ticket" style="width: 170px; height: 170px; margin-top: 5px;" />
+            </div>
             <p style="margin: 10px 0 0 0; font-size: 10px; color: #9ca3af;">Please show this email/QR code on your smartphone at the ticket box office check-in.</p>
           </div>
 
@@ -70,29 +97,42 @@ export const sendConfirmationEmail = async (booking, show) => {
           </div>
         </div>
       `,
-      attachments: [{
-        filename: `ticket-${booking.bookingId}.png`,
-        path: booking.qrCodeUrl, 
-        cid: 'qrcode',
-        contentDisposition: 'inline'
-      }]
+      attachments
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`Confirmation email sent successfully to ${booking.customerDetails.email}. Message ID: ${info.messageId}`);
-    return info;
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${RESEND_API_KEY}`
+      },
+      body: JSON.stringify(mailOptions)
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || `HTTP error ${response.status}`);
+    }
+
+    console.log(`Confirmation email sent successfully via Resend. Message ID: ${data.id}`);
+    return data;
   } catch (error) {
-    console.error('Failed to send confirmation email:', error);
-    
+    console.error('Failed to send confirmation email via Resend:', error.message);
     return null;
   }
 };
 
 export const sendOTPEmail = async (email, otp) => {
+  if (!RESEND_API_KEY) {
+    console.warn('[RESEND WARNING] RESEND_API_KEY is not defined. Email will not be sent.');
+    console.log(`[CRITICAL BYPASS] OTP for ${email} is ${otp}`);
+    return null;
+  }
+
   try {
     const mailOptions = {
-      from: `"SeatDekho Verification" <${SENDER_EMAIL}>`,
-      to: email,
+      from: `SeatDekho <${SENDER_EMAIL}>`,
+      to: [email],
       subject: `SeatDekho - OTP Verification Code: ${otp}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #fcfcfc;">
@@ -119,14 +159,25 @@ export const sendOTPEmail = async (email, otp) => {
       `
     };
 
-    console.log(`[DEVELOPER OTP BYPASS] Sent OTP to ${email}: ${otp}`);
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`OTP email sent successfully to ${email}. Message ID: ${info.messageId}`);
-    return info;
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${RESEND_API_KEY}`
+      },
+      body: JSON.stringify(mailOptions)
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || `HTTP error ${response.status}`);
+    }
+
+    console.log(`OTP email sent successfully via Resend. Message ID: ${data.id}`);
+    return data;
   } catch (error) {
-    console.error('Failed to send OTP email via SMTP:', error.message);
+    console.error('Failed to send OTP email via Resend:', error.message);
     console.log(`[CRITICAL BYPASS] OTP for ${email} is ${otp}`);
     return null;
   }
 };
-

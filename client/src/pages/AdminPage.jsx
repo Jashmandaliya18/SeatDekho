@@ -88,8 +88,15 @@ export default function AdminPage() {
       setError('');
       const showsData = await api.get('/shows');
       const bookingsData = await api.get('/bookings');
-      setShows(showsData);
-      setBookings(bookingsData);
+      if (Array.isArray(showsData) && Array.isArray(bookingsData)) {
+        setShows(showsData);
+        setBookings(bookingsData);
+      } else {
+        console.error('Invalid responses from admin API:', { showsData, bookingsData });
+        setShows([]);
+        setBookings([]);
+        setError('Invalid data received. Please check that VITE_API_URL has the correct "/api" suffix on Vercel.');
+      }
     } catch (err) {
       console.error(err);
       setError('Failed to fetch dashboard metrics. Check server logs.');

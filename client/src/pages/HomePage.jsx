@@ -26,7 +26,13 @@ export default function HomePage({ onSelectShow, setView, searchTerm, setSearchT
       try {
         setLoading(true);
         const data = await api.get('/shows');
-        setShows(data);
+        if (Array.isArray(data)) {
+          setShows(data);
+        } else {
+          console.error('Expected array from /shows API, received:', data);
+          setShows([]);
+          setError('API response format is invalid. Please check that VITE_API_URL has the correct "/api" suffix on Vercel.');
+        }
       } catch (err) {
         console.error(err);
         setError('Failed to fetch upcoming drama shows. Check backend server.');
